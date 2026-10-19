@@ -1,0 +1,68 @@
+/* pnpm build 后运行；仅使用本地存储，不连接第三方 OSS。 */
+const { strict: assert } = require('node:assert');
+const { mkdtempSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const dir = mkdtempSync(join(tmpdir(), 'studydocs-v3-smoke-'));
+process.env.STORAGE_DIR = dir;
+process.env.ADMIN_USERNAME = 'studyadmin';
+process.env.ADMIN_PASSWORD = 'InitialPassword123!';
+const { DatabaseService } = require('../dist/database.service');
+const { SiteService } = require('../dist/site.service');
+const { StorageService } = require('../dist/storage.service');
+const { AuthService } = require('../dist/auth');
+const { DocumentsService } = require('../dist/documents.service');
+(async () => {
+  const database = new DatabaseService();
+  try {
+    const site = new SiteService(database);
+    const storage = new StorageService(database);
+    const auth = new AuthService(database,site);
+    const docs = new DocumentsService(database,storage,site);
+    docs.onModuleInit();
+    const admin = database.db.prepare("SELECT id FROM users WHERE role='admin'").get();
+    assert.ok(admin.id);
+    assert.ok(docs.list(admin.id).length>=5,'初始化演示资料');
+    const headers = {};
+    const res = { cookie(k,v,opts){headers[k]={token:v,options:opts};} };
+    assert.equal(auth.login('studyadmin','InitialPassword123!',res).role,'admin');
+    assert.equal(auth.auth(headers.studydocs_session.token).id,admin.id);
+    assert.equal(headers.studydocs_session.options.maxAge,7*24*60*60*1000);
+    assert.equal(headers.studydocs_session.options.httpOnly,true);
+    assert.throws(()=>auth.register('newuser','Password1234!'),/关闭开放注册/);
+    site.patch({allowRegistration:true,siteName:'知识笔记'});
+    const member = auth.register('newuser','Password1234!');
+    assert.equal(member.role,'user');
+    assert.equal(docs.list(member.id).length,0,'普通用户不能看到管理员的文件');
+    const folder = docs.create(member.id,{kind:'folder',name:'私有目录'});
+    const child = docs.create(member.id,{kind:'folder',name:'子目录',parentId:folder.id});
+    const note = docs.create(member.id,{kind:'markdown',name:'笔记',parentId:child.id,content:'# hello'});
+    assert.throws(()=>docs.find(admin.id,note.id),/不存在/);
+    assert.throws(()=>docs.create(admin.id,{kind:'markdown',name:'越权',parentId:folder.id}),/不存在/);
+    const updated = docs.patch(member.id,note.id,{content:'## updated',version:note.version});
+    assert.equal(updated.content,'## updated');
+    assert.throws(()=>docs.patch(member.id,note.id,{content:'outdated',version:note.version}),/其他操作更新/);
+    assert.throws(()=>docs.patch(member.id,folder.id,{parentId:child.id}),/子目录/);
+    const chineseName = '中文学习资料（2026）.pdf';
+    const mojibake = Buffer.from(chineseName,'utf8').toString('latin1');
+    const pdf = await docs.upload(member.id,{originalname:mojibake,buffer:Buffer.from('%PDF-1.4\ntest'),size:13},child.id,chineseName);
+    assert.equal(pdf.fileName,chineseName);
+    assert.equal(pdf.storageId,'local-default');
+    assert.equal((await docs.file(member.id,pdf.id)).mime,'application/pdf');
+    // 新建本地存储并切换；旧文件仍指向原 local-default。
+    const second = storage.create({name:'第二存储',provider:'local',prefix:'notes'});
+    storage.activate(second.id);
+    assert.equal((await docs.file(member.id,pdf.id)).name,chineseName);
+    const pdf2 = await docs.upload(member.id,{originalname:'second.pdf',buffer:Buffer.from('%PDF-1.4\ntest'),size:13},null);
+    assert.equal(pdf2.storageId,second.id);
+    assert.throws(()=>storage.remove('local-default'),/仍关联/);
+    docs.trash(member.id,folder.id);
+    assert.ok(!docs.list(member.id).some((x)=>x.id===note.id));
+    docs.restore(member.id,folder.id);
+    assert.ok(docs.list(member.id).some((x)=>x.id===note.id));
+    docs.trash(member.id,folder.id);
+    await docs.removeForever(member.id,folder.id);
+    assert.ok(!docs.list(member.id).some((x)=>x.id===note.id));
+    console.log('✓ v0.3.0 冒烟测试通过：登录一周 / 禁止注册 / 用户数据隔离 / 文档 / 中文上传 / 存储切换后旧文件可读 / 回收站');
+  } finally { database.onModuleDestroy(); rmSync(dir,{recursive:true,force:true}); }
+})().catch((error)=>{console.error(error);process.exitCode=1;});

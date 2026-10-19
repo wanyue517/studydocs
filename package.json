@@ -1,0 +1,16 @@
+{
+  "name": "studydocs-monorepo",
+  "version": "0.3.1",
+  "private": true,
+  "packageManager": "pnpm@10.18.2",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @studydocs/api --filter @studydocs/web dev",
+    "build": "pnpm --filter @studydocs/api build && pnpm --filter @studydocs/web build",
+    "typecheck": "pnpm --filter @studydocs/api typecheck && pnpm --filter @studydocs/web typecheck",
+    "smoke": "pnpm --filter @studydocs/api build && pnpm --filter @studydocs/api smoke",
+    "test:filename": "pnpm --filter @studydocs/api test:filename"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
