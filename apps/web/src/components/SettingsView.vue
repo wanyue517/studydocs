@@ -61,7 +61,7 @@ async function uploadLogo(event: { files: File[] | File }) {
   if (!file) return;
   try { await api.uploadLogo(file); await account.refreshSite(); message.value='Logo 已更新'; logoVersion.value=Date.now(); }
   catch(e) { describe(e); }
-  finally { logoUploadRef.value?.clear(); }
+  finally { (logoUploadRef.value as unknown as { clear: () => void } | null)?.clear(); }
 }
 async function clearLogo() {
   try {await api.clearLogo();await account.refreshSite();message.value='已移除 Logo';}catch(e){describe(e);}

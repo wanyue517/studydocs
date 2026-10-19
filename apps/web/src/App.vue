@@ -111,11 +111,18 @@ async function submitModal() {
     }
   } finally { creating.value = false; }
 }
-function openUpload(parent: string | null = null) { modalParent.value = parent; menu.value = null; fileInput.value?.choose(); }
+function focusSearch() {
+  void nextTick(() => (searchInput.value as unknown as { $el: HTMLInputElement } | null)?.$el?.focus());
+}
+function openUpload(parent: string | null = null) {
+  modalParent.value = parent;
+  menu.value = null;
+  (fileInput.value as unknown as { choose: () => void } | null)?.choose();
+}
 async function handleFiles(event: { files: File[] | File }) {
   const files = Array.isArray(event.files) ? event.files : [event.files];
   for (const file of files) await store.upload(file, modalParent.value);
-  fileInput.value?.clear();
+  (fileInput.value as unknown as { clear: () => void } | null)?.clear();
   mobileSidebar.value = false;
 }
 function showMenu(item: KnowledgeItem | null, event: MouseEvent) {
@@ -191,7 +198,7 @@ function toggleStar(item: KnowledgeItem | null = active.value) {
 }
 function removeActive() { if (active.value) requestDelete(active.value); }
 function onKeydown(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); store.navigate('search'); void nextTick(() => searchInput.value?.$el?.focus()); }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); store.navigate('search'); focusSearch(); }
   if (event.key === 'Escape') { mobileSidebar.value = false; }
 }
 function go(panel: 'home' | 'recent' | 'favorites' | 'trash') { store.navigate(panel); mobileSidebar.value = false; outline.value = []; }
@@ -238,7 +245,7 @@ watch(() => account.user?.id, (id, oldId) => {
     <aside class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar }" @click.stop>
       <div class="sidebar-inner">
       <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><BookOpenText :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
-      <Button class="search-trigger" @click="store.navigate('search'); nextTick(() => searchInput?.$el?.focus())"><Search :size="16" />搜索文档<kbd>Ctrl K</kbd></Button>
+      <Button class="search-trigger" @click="store.navigate('search'); focusSearch()"><Search :size="16" />搜索文档<kbd>Ctrl K</kbd></Button>
       
       <div class="side-nav">
         <Button :class="{ active: store.panel === 'home' }" @click="go('home')"><Home :size="17" />知识库首页</Button>
@@ -259,7 +266,7 @@ watch(() => account.user?.id, (id, oldId) => {
         <Button class="icon-btn mobile-menu-btn" title="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><Menu :size="20" /></Button>
         <div class="breadcrumbs"><Button @click="go('home')">知识库</Button><template v-if="store.panel === 'document' && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><Button v-if="crumb.kind === 'folder'" @click="store.toggleFolder(crumb.id)">{{ crumb.name }}</Button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
         <div class="topbar-right">
-          <Button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); nextTick(() => searchInput?.$el?.focus())"><Search :size="19" /></Button>
+          <Button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); focusSearch()"><Search :size="19" /></Button>
           <template v-if="store.panel === 'document' && active"><div class="topbar-split"></div><Button class="icon-btn star-toggle" :class="{ 'is-starred': active.starred }" :title="active.starred ? '取消收藏' : '收藏文档'" @click.stop="toggleStar()"><Star :size="19" :fill="active.starred ? 'currentColor' : 'none'" /></Button><div class="more-anchor"><Button class="icon-btn" text title="更多操作" @click.stop="moreMenuRef?.toggle($event)"><MoreHorizontal :size="21" /></Button><PrimeMenu ref="moreMenuRef" :model="moreItems" popup class="study-popup-menu" /></div></template>
           
         </div>
