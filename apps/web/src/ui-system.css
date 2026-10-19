@@ -1,0 +1,113 @@
+/* StudyDocs design system: ink + subdued ocean-blue, consistent with PrimeVue Aura. */
+:root {
+  --ink: #233246;
+  --muted: #536579;
+  --line: #dce4ec;
+  --accent: #326889;
+  --accent-light: #e9f2f7;
+  --study-surface: #fff;
+  --study-soft: #f6f8fa;
+}
+body, .main-area, .document-view, .collection-view { color: var(--ink); }
+.icon-rail, .folder-sidebar { background: var(--study-soft); border-color: var(--line); }
+.topbar, .document-toolbar { border-color: var(--line); }
+.workspace-logo strong, .breadcrumbs strong, .article-intro h1, .section-header h2,
+.collection-heading h1, .settings-header h1, .list-main strong { color: var(--ink); }
+.tree-line, .side-nav button, .breadcrumbs button, .sidebar-section-title,
+.outline-list button, .document-date, .collection-heading p { color: var(--muted); }
+.tree-line.selected, .side-nav button.active, .rail-button.active {
+  color: var(--accent); background: var(--accent-light);
+}
+/* PrimeVue interactive surfaces for the app shell (business navigation stays custom layout). */
+.icon-btn.p-button, .rail-button.p-button, .sidebar-title-actions .p-button,
+.collapse-sidebar.p-button, .tree-more.p-button, .reopen.p-button,
+.mobile-menu-btn.p-button, .topbar-search.p-button,
+.sidebar-foot .p-button {
+  display: inline-flex; justify-content: center; align-items: center;
+  padding: 0; min-width: 0; border: 0; background: transparent; box-shadow: none;
+  color: #546779;
+}
+.icon-btn.p-button:hover, .rail-button.p-button:hover, .sidebar-title-actions .p-button:hover,
+.tree-more.p-button:hover { background: #e8eff4; color: var(--accent); }
+.rail-button.p-button.active { background: var(--accent-light); color: var(--accent); }
+.brand-mark.p-button { padding: 0; background: var(--accent); border: 0; color: #fff; }
+.brand-mark.p-button:hover { background: #285570; }
+.side-nav .p-button, .search-trigger.p-button, .breadcrumbs .p-button,
+.outline-list .p-button, .see-all.p-button, .storage-actions .p-button {
+  font-weight: 500; box-shadow: none;
+}
+.side-nav .p-button { justify-content: flex-start; border: 0; background: transparent; }
+.side-nav .p-button.active, .side-nav .p-button:hover { background: var(--accent-light); color: var(--accent); }
+.sidebar-title-actions .p-button { width: 26px; height: 26px; }
+.sidebar-foot .p-button { width: 30px; height: 30px; }
+.search-trigger.p-button { background: #edf2f6; border: 1px solid #d9e2e9; color: #465b70; justify-content: flex-start; }
+.search-trigger.p-button:hover { background: #e4eef5; color: var(--accent); }
+.breadcrumbs .p-button { padding: 3px 0; background: transparent; border: 0; color: #51647a; }
+.outline-list .p-button { width: 100%; justify-content: flex-start; border-radius: 4px; background: transparent; border: 0; }
+.outline-list .p-button:hover { color: var(--accent); background: #eff5f8; }
+.quick-grid .p-button, .doc-list .p-button.doc-list-item, .hero-button.p-button {
+  font: inherit;
+}
+.hero-button.p-button, .primary-btn.p-button { background: var(--accent); border: 1px solid var(--accent); color: #fff; }
+.hero-button.p-button:hover, .primary-btn.p-button:hover { background: #285570; border-color: #285570; }
+.quick-grid .p-button { background: #fff; color: #24374b; border: 1px solid #dce4eb; }
+.quick-grid .p-button:hover { border-color: #b0cadb; background: #f5f9fb; }
+.doc-list .p-button.doc-list-item { background: #fff; color: #293e53; border: 0; border-bottom: 1px solid #e3e9ef; }
+.doc-list .p-button.doc-list-item:hover { background: #f6f9fb; }
+.document-toolbar .p-button.edit-toggle { color: #36516b; background: #fff; border: 1px solid #cddbe6; }
+.document-toolbar .p-button.edit-toggle:hover { color: var(--accent); border-color: #a8c3d5; }
+.rich-toolbar .p-button { width: 31px; height: 31px; min-width: 31px; padding: 0; background: transparent; border: 0; color: #506479; box-shadow: none; }
+.rich-toolbar .p-button:hover, .rich-toolbar .p-button.active { background: var(--accent-light); color: var(--accent); }
+.rich-toolbar { background: #f6f9fb; border-color: #dce4eb; }
+.document-tag.p-tag { font-size: 12px; font-weight: 600; background: #eaf1f5; color: #355773; }
+.study-popup-menu.p-menu, .study-popup-menu.p-contextmenu {
+  min-width: 202px; border: 1px solid #dce4ec; box-shadow: 0 15px 45px rgb(26 46 62 / 12%);
+  border-radius: 10px; padding: 5px;
+}
+.study-popup-menu .p-menu-item-link, .study-popup-menu .p-contextmenu-item-link {
+  padding: 10px 12px; border-radius: 6px; color: #34485b; font-size: 13px;
+}
+.study-popup-menu .p-menu-item-link:hover { background: var(--accent-light); }
+.study-confirm-dialog.p-dialog { width: min(430px, calc(100vw - 32px)); }
+.study-confirm-dialog .p-dialog-content { padding-top: 12px; }
+.study-confirm-dialog .p-dialog-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; }
+.study-dialog .p-dialog-header { color: var(--ink); }
+.study-dialog .p-button { font-size: 13px; }
+.settings-tabs.study-segmented { display: flex; gap: 0; width: max-content; max-width: 100%; flex-wrap: wrap; border: 0; margin: 22px 0 26px; }
+.settings-tabs.study-segmented .p-togglebutton {
+  background: #fff; border: 1px solid #d7e1e9; color: #526579;
+  padding: 10px 17px; font-size: 13px;
+}
+.settings-tabs.study-segmented .p-togglebutton.p-togglebutton-checked {
+  background: var(--accent-light); color: var(--accent); border-color: #b9d1df;
+}
+.settings-card .p-inputtext, .settings-card .p-inputnumber, .settings-card .p-password,
+.settings-card .p-textarea { width: 100%; }
+.settings-card .p-inputnumber-input, .settings-card .p-password-input { width: 100%; }
+.settings-card .p-toggleswitch { flex-shrink: 0; }
+.settings-card .settings-number { width: 155px; }
+.settings-feedback.p-message { margin: 0 0 18px; }
+.storage-actions .p-button { padding: 6px 8px; font-size: 12px; color: var(--accent); }
+.storage-actions .p-button:hover { background: var(--accent-light); }
+.auth-card .p-password { display: flex; width: 100%; }
+.auth-card .p-password .p-inputtext { width: 100%; min-height: 43px; padding-right: 42px; }
+.auth-card .auth-submit.p-button { justify-content: center; background: var(--accent); border: 0; color: white; }
+.auth-card .auth-submit.p-button:hover { background: #285570; }
+.auth-switch .p-button.p-button-link { color: var(--accent); padding: 4px 5px; }
+.p-button:focus-visible, .p-inputtext:focus-visible, .p-toggleswitch:focus-visible,
+.p-select:focus-visible { outline: 2px solid #74a1ba; outline-offset: 2px; }
+.p-inputtext, .p-select, .p-textarea { border-radius: 8px; }
+.p-dialog .p-dialog-content, .p-dialog .p-dialog-header { color: var(--ink); }
+.home-hero { background: linear-gradient(110deg, #eaf2f7, #f2f6f8 65%, #fafbfc); border-color: #d8e4ec; }
+.hero-content h1 em { color: #326889; }
+.stat-icon.blue, .stat-icon.orange, .stat-icon.purple,
+.quick-icon.sky, .quick-icon.amber, .quick-icon.mint {
+  background: #e9f2f7; color: #386985;
+}
+.avatar, .top-avatar { background: #617b8e; box-shadow: none; }
+@media(max-width: 580px) {
+  .settings-tabs.study-segmented { width: 100%; }
+  .settings-tabs.study-segmented .p-togglebutton { flex: 1; padding: 8px 10px; }
+  .study-confirm-dialog .p-dialog-footer { flex-wrap: wrap; }
+  .study-confirm-dialog .p-dialog-footer .p-button { flex: 1; }
+}

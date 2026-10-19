@@ -1,6 +1,15 @@
-# 拾页 StudyDocs v0.3.2
+# 拾页 StudyDocs v0.3.3
 
 简洁的个人学习文档管理系统：**pnpm Monorepo + Vue 3 + TypeScript + NestJS + SQLite + 可配置 OSS**。界面借鉴语雀的知识库阅读方式，不使用后台管理模板。保留 v0.2.0 的目录树、Markdown、富文本、PDF/DOCX 在线预览与宽屏阅读布局。
+
+## v0.3.3 前台 UI 组件统一与主题
+
+- **PrimeVue 4 + Aura** 已扩展到登录（输入框、密码框、提示）、系统设置（输入框、数字输入、开关、选项组、按钮、Logo 上传）、文档文件上传、目录右键菜单、顶部操作菜单、删除确认框、全局消息通知、文档操作按钮、回收站和富文本工具栏等位置。
+- 专属的三栏文档布局与带拖放的目录树层级仍由业务组件维护，图标使用 Lucide；Markdown、富文本、PDF、Word 继续使用专项开源编辑器和预览器，避免重复实现它们的核心功能。
+- 新增 `apps/web/src/theme.ts`：定义品牌色板和组件语义色；`apps/web/src/ui-system.css` 保留少量知识库布局和样式微调。主题基调为**低饱和海蓝灰、白色内容区、深石墨正文**，不使用明亮彩虹配色。
+- 删除确认使用 PrimeVue ConfirmDialog/ConfirmationService，提示使用 ToastService，菜单由组件库管理点击外部自动关闭、定位与键盘行为，避免原先的手写两套菜单机制。
+- 本次仅修改 Web，不涉及数据库迁移和后端 API。
+- 当前执行环境不能连接 npm Registry；`pnpm-lock.yaml` 暂未自动更新。合并前必须执行 `pnpm install --no-frozen-lockfile && pnpm typecheck && pnpm build`，并提交更新后的锁文件。
 
 ## UI 组件与弹窗优化（v0.3.2）
 

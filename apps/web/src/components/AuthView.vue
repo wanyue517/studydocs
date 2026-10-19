@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { BookOpenText, Eye, EyeOff } from 'lucide-vue-next';
+import { BookOpenText } from 'lucide-vue-next';
 import { useAccountStore } from '../stores/account';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import Password from 'primevue/password';
+import Message from 'primevue/message';
 const account = useAccountStore();
 const mode = ref<'login'|'register'>('login');
 const username = ref('');
 const password = ref('');
-const showPassword = ref(false);
 const pending = ref(false);
 const error = ref('');
 async function submit() {
@@ -36,11 +37,14 @@ async function submit() {
           <label for="auth-user">用户名</label>
           <InputText id="auth-user" v-model="username" required minlength="3" maxlength="32" autocomplete="username" placeholder="输入用户名" />
           <label for="auth-pass">密码</label>
-          <div class="auth-password"><InputText id="auth-pass" v-model="password" :type="showPassword?'text':'password'" minlength="10" maxlength="128" required :autocomplete="mode==='login'?'current-password':'new-password'" placeholder="至少 10 位字符" /><button type="button" :aria-label="showPassword?'隐藏密码':'显示密码'" @click="showPassword=!showPassword"><EyeOff v-if="showPassword" :size="18" /><Eye v-else :size="18" /></button></div>
-          <div v-if="error || account.message" class="auth-error">{{ error || account.message }}</div>
+          <Password input-id="auth-pass" v-model="password" :feedback="false" toggle-mask
+            minlength="10" maxlength="128" required
+            :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+            placeholder="至少 10 位字符" class="auth-password" input-class="auth-password-input" />
+          <Message v-if="error || account.message" severity="error" :closable="false">{{ error || account.message }}</Message>
           <Button type="submit" class="auth-submit" :loading="pending" :disabled="pending" :label="mode === 'login' ? '登录知识库' : '创建账号'" />
         </form>
-        <div v-if="account.site.allowRegistration" class="auth-switch">{{ mode==='login'?'还没有账号？':'已有账号？' }} <button @click="mode=mode==='login'?'register':'login';error=''">{{ mode==='login'?'立即注册':'返回登录' }}</button></div>
+        <div v-if="account.site.allowRegistration" class="auth-switch">{{ mode==='login'?'还没有账号？':'已有账号？' }} <Button link size="small" @click="mode=mode==='login'?'register':'login';error=''">{{ mode==='login'?'立即注册':'返回登录' }}</Button></div>
       </div>
       <div v-if="account.site.loginNotice" class="auth-notice">{{ account.site.loginNotice }}</div>
       <footer>{{ account.site.footerText }} <span v-if="account.site.icpNumber">· {{ account.site.icpNumber }}</span><span v-if="account.site.policeRecordNumber"> · {{ account.site.policeRecordNumber }}</span></footer>

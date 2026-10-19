@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Check, Database, ExternalLink, HardDrive, ImagePlus, Plus, ShieldCheck, Settings2, Trash2 } from 'lucide-vue-next';
+import { Database, ExternalLink, HardDrive, ImagePlus, ShieldCheck, Trash2 } from 'lucide-vue-next';
 import { api, type SiteSettings, type StorageProfile, type StorageInput, type Provider } from '../lib/api';
 import { useAccountStore } from '../stores/account';
 import Dialog from 'primevue/dialog';
@@ -8,7 +8,19 @@ import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import ToggleSwitch from 'primevue/toggleswitch';
+import Password from 'primevue/password';
+import Textarea from 'primevue/textarea';
+import InputNumber from 'primevue/inputnumber';
+import SelectButton from 'primevue/selectbutton';
+import Message from 'primevue/message';
+import { useConfirm } from 'primevue/useconfirm';
+import FileUpload from 'primevue/fileupload';
 const account = useAccountStore();
+const confirm = useConfirm();
+const tabOptions = computed(() => [
+  ...(account.user?.role === 'admin' ? [{ label: '网站设置', value: 'site' }, { label: '文件存储', value: 'storage' }] : []),
+  { label: '账号安全', value: 'account' },
+]);
 const tab = ref<'site'|'storage'|'account'>('site');
 const oldPassword = ref('');
 const newPassword = ref('');
@@ -18,6 +30,7 @@ const editingId = ref<string|null>(null);
 const saving = ref(false);
 const formOpen = ref(false);
 const logoVersion = ref(Date.now());
+const logoUploadRef = ref<InstanceType<typeof FileUpload> | null>(null);
 const error = ref('');
 const message = ref('');
 const labels:Record<Provider,string> = {local:'本地文件系统',r2:'Cloudflare R2',minio:'MinIO',qiniu:'七牛云 Kodo',aliyun:'阿里云 OSS'};
@@ -42,11 +55,13 @@ async function saveSite() {
   try { site.value=await api.saveSite(site.value);await account.refreshSite();message.value='网站配置已保存'; }
   catch(e) {describe(e);} finally {saving.value=false;}
 }
-async function uploadLogo(event:Event) {
-  const input=event.target as HTMLInputElement;
-  const file=input.files?.[0]; if(!file)return;
-  try { await api.uploadLogo(file);await account.refreshSite();message.value='Logo 已更新';logoVersion.value=Date.now(); }
-  catch(e) {describe(e);} finally {input.value='';}
+async function uploadLogo(event: { files: File[] | File }) {
+  const files = Array.isArray(event.files) ? event.files : [event.files];
+  const file = files[0];
+  if (!file) return;
+  try { await api.uploadLogo(file); await account.refreshSite(); message.value='Logo 已更新'; logoVersion.value=Date.now(); }
+  catch(e) { describe(e); }
+  finally { logoUploadRef.value?.clear(); }
 }
 async function clearLogo() {
   try {await api.clearLogo();await account.refreshSite();message.value='已移除 Logo';}catch(e){describe(e);}
@@ -71,36 +86,46 @@ async function test(id:string) {
   try{const r=await api.testStorage(id);message.value=r.message;}catch(e){describe(e);}
 }
 async function remove(id:string) {
-  if(!window.confirm('删除未使用的存储档案？已有关联文件的档案无法删除。'))return;
-  try{await api.removeStorage(id);await refresh();message.value='存储配置已删除';}catch(e){describe(e);}
+  confirm.require({
+    header: '删除存储配置',
+    message: '确定删除此存储配置吗？已被文件引用的配置无法删除。',
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    acceptProps: { label: '删除', severity: 'danger' },
+    accept: async () => {
+      try { await api.removeStorage(id); await refresh(); message.value = '存储配置已删除'; }
+      catch(e) { describe(e); }
+    },
+  });
 }
 </script>
 <template>
   <div class="settings-page">
     <div class="settings-header"><h1>系统设置</h1></div>
     <template v-if="account.user">
-      <div class="settings-tabs"><button v-if="account.user.role==='admin'" :class="{active:tab==='site'}" @click="tab='site'"><Settings2 :size="16" />网站设置</button><button v-if="account.user.role==='admin'" :class="{active:tab==='storage'}" @click="tab='storage'"><Database :size="16" />文件存储</button><button :class="{active:tab==='account'}" @click="tab='account'"><ShieldCheck :size="16" />账号安全</button></div>
-      <p v-if="error" class="settings-error">{{ error }}</p><p v-if="message" class="settings-success"><Check :size="16" />{{ message }}</p>
+      <SelectButton v-model="tab" :options="tabOptions" option-label="label" option-value="value"
+        :allow-empty="false" class="settings-tabs study-segmented" />
+      <Message v-if="error" severity="error" class="settings-feedback">{{ error }}</Message>
+      <Message v-if="message" severity="success" class="settings-feedback">{{ message }}</Message>
       <template v-if="tab==='account'">
         <form class="settings-card" @submit.prevent="savePassword">
           <div class="settings-card-title"><h2>修改登录密码</h2><p>当前账号：{{ account.user.username }}。修改后其他浏览器将需要重新登录。</p></div>
-          <label>当前密码<input v-model="oldPassword" type="password" required autocomplete="current-password" /></label>
-          <label>新密码<input v-model="newPassword" type="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="至少 10 位字符" /></label>
+          <label>当前密码<Password v-model="oldPassword" :feedback="false" toggle-mask required autocomplete="current-password" fluid /></label>
+          <label>新密码<Password v-model="newPassword" :feedback="false" toggle-mask required minlength="10" maxlength="128" autocomplete="new-password" placeholder="至少 10 位字符" fluid /></label>
           <div class="settings-actions"><Button type="submit" label="更新密码" :loading="saving" :disabled="saving" /></div>
         </form>
       </template>
       <template v-if="tab==='site' && site && account.user.role==='admin'">
         <form class="settings-card" @submit.prevent="saveSite">
           <div class="settings-card-title"><h2>品牌与展示</h2><p>这些信息将展示在登录页、浏览器标签及站点页脚。</p></div>
-          <div class="settings-logo"><span class="settings-logo-preview"><img v-if="account.site.logoUrl" :src="`${account.site.logoUrl}?t=${logoVersion}`" alt="站点 Logo" /><ImagePlus v-else :size="27" /></span><div><label class="settings-upload">上传 Logo<input type="file" accept="image/png,image/jpeg,image/webp" hidden @change="uploadLogo" /></label><button v-if="account.site.logoUrl" type="button" class="text-button" @click="clearLogo">移除 Logo</button><small>支持 PNG、JPG、WebP，最大 2 MB</small></div></div>
-          <div class="form-two"><label>站点名称<input v-model="site.siteName" required maxlength="140" /></label><label>站点副标题<input v-model="site.siteSubtitle" maxlength="140" /></label></div>
-          <label>页脚文案<input v-model="site.footerText" maxlength="140" /></label>
-          <div class="form-two"><label>ICP备案号<input v-model="site.icpNumber" placeholder="选填" maxlength="140" /></label><label>公安备案号<input v-model="site.policeRecordNumber" placeholder="选填" maxlength="140" /></label></div>
-          <label>登录页公告<textarea v-model="site.loginNotice" rows="3" maxlength="500" placeholder="可选，显示在登录页面" /></label>
+          <div class="settings-logo"><span class="settings-logo-preview"><img v-if="account.site.logoUrl" :src="`${account.site.logoUrl}?t=${logoVersion}`" alt="站点 Logo" /><ImagePlus v-else :size="27" /></span><div><FileUpload ref="logoUploadRef" mode="basic" choose-label="上传 Logo" accept="image/png,image/jpeg,image/webp" :max-file-size="2097152" auto custom-upload @uploader="uploadLogo" /><Button v-if="account.site.logoUrl" type="button" link size="small" label="移除 Logo" @click="clearLogo" /><small>支持 PNG、JPG、WebP，最大 2 MB</small></div></div>
+          <div class="form-two"><label>站点名称<InputText v-model="site.siteName" required maxlength="140" /></label><label>站点副标题<InputText v-model="site.siteSubtitle" maxlength="140" /></label></div>
+          <label>页脚文案<InputText v-model="site.footerText" maxlength="140" /></label>
+          <div class="form-two"><label>ICP备案号<InputText v-model="site.icpNumber" placeholder="选填" maxlength="140" /></label><label>公安备案号<InputText v-model="site.policeRecordNumber" placeholder="选填" maxlength="140" /></label></div>
+          <label>登录页公告<Textarea v-model="site.loginNotice" rows="3" maxlength="500" placeholder="可选，显示在登录页面" /></label>
           <div class="settings-divider"></div>
           <div class="settings-card-title"><h2>用户与安全</h2><p>注册开关即时生效；关闭后仅现有账号可登录。</p></div>
-          <label class="settings-toggle"><span><strong>允许用户自行注册</strong><small>关闭后注册接口也将拒绝请求</small></span><input v-model="site.allowRegistration" type="checkbox" /></label>
-          <label>单文件上传大小上限 (MB)<input v-model.number="site.maxUploadMb" type="number" min="1" max="25" style="max-width:160px" /></label>
+          <label class="settings-toggle"><span><strong>允许用户自行注册</strong><small>关闭后注册接口也将拒绝请求</small></span><ToggleSwitch v-model="site.allowRegistration" /></label>
+          <label>单文件上传大小上限 (MB)<InputNumber v-model="site.maxUploadMb" :min="1" :max="25" :use-grouping="false" class="settings-number" /></label>
           <div class="settings-actions"><Button type="submit" label="保存网站设置" :loading="saving" :disabled="saving" /></div>
         </form>
       </template>
@@ -108,7 +133,7 @@ async function remove(id:string) {
         <div class="settings-card"><div class="settings-card-title"><h2>默认存储</h2><p>仅影响之后上传的文件；旧文件继续从原存储读取，不迁移。</p></div>
           <div class="current-storage"><HardDrive :size="23" /><div><strong>{{ active?.name??'尚未配置' }}</strong><small>{{ active?labels[active.provider]:'请选择一个有效存储档案' }}</small></div><span class="active-label">正在使用</span></div>
           <div class="storage-section-heading"><strong>已配置的存储空间</strong><Button class="settings-add" label="添加存储" size="small" outlined @click="begin()" /></div>
-          <div v-for="p in profiles" :key="p.id" class="storage-row"><span class="storage-row-icon"><Database :size="18" /></span><div class="storage-details"><strong>{{ p.name }}</strong><small>{{ labels[p.provider] }} · {{ p.bucket||'本地目录' }} <span v-if="p.active">· 默认</span></small></div><div class="storage-actions"><button @click="begin(p)">编辑</button><button @click="test(p.id)">测试</button><button v-if="!p.active" @click="activate(p.id)">设为默认</button><button v-if="!p.active" title="删除配置" @click="remove(p.id)"><Trash2 :size="15" /></button></div></div>
+          <div v-for="p in profiles" :key="p.id" class="storage-row"><span class="storage-row-icon"><Database :size="18" /></span><div class="storage-details"><strong>{{ p.name }}</strong><small>{{ labels[p.provider] }} · {{ p.bucket||'本地目录' }} <span v-if="p.active">· 默认</span></small></div><div class="storage-actions"><Button text size="small" label="编辑" @click="begin(p)" /><Button text size="small" label="测试" @click="test(p.id)" /><Button v-if="!p.active" text size="small" label="设为默认" @click="activate(p.id)" /><Button v-if="!p.active" text size="small" severity="danger" aria-label="删除配置" @click="remove(p.id)"><Trash2 :size="15" /></Button></div></div>
           <p class="settings-hint"><ShieldCheck :size="15" />密钥在服务器加密存储，不能从设置页面读取。请永久保管服务端的 STORAGE_ENCRYPTION_KEY。</p>
         </div>
         <Dialog v-model:visible="formOpen" modal :draggable="false" :closable="!saving"

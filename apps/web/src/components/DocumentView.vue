@@ -12,6 +12,8 @@ import { api } from '../lib/api';
 import { fmtDate, kindLabel } from '../lib/utils';
 import { useKnowledgeStore } from '../stores/knowledge';
 import RichTextEditor from './RichTextEditor.vue';
+import Button from 'primevue/button';
+import Tag from 'primevue/tag';
 
 interface Heading { level: number; title: string; index: number }
 const props = defineProps<{ item: KnowledgeItem }>();
@@ -86,11 +88,11 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); if (dirty.value) void pe
 <template>
   <div class="document-view">
     <div class="document-toolbar">
-      <span class="document-tag"><span class="tiny-dot"></span>{{ kindLabel[item.kind] }}</span>
+      <Tag class="document-tag" :value="kindLabel[item.kind]" severity="secondary" />
       <span class="document-date">更新于 {{ fmtDate(item.updatedAt) }}</span>
       <span class="toolbar-spacer"></span>
       <span v-if="editable" class="save-state"><LoaderCircle v-if="saving || dirty" :size="14" class="spin" /><Check v-else :size="14" />{{ saving || dirty ? '保存中...' : '已自动保存' }}</span>
-      <button v-if="editable" class="edit-toggle" @click="setEditing(!editing)"><Eye v-if="editing" :size="15" /><PencilLine v-else :size="15" />{{ editing ? '完成编辑' : '编辑文档' }}</button>
+      <Button v-if="editable" class="edit-toggle" @click="setEditing(!editing)"><Eye v-if="editing" :size="15" /><PencilLine v-else :size="15" />{{ editing ? '完成编辑' : '编辑文档' }}</Button>
       <a v-if="item.kind === 'pdf' || item.kind === 'word'" class="secondary-btn" :href="api.fileUrl(item.id, true)" :download="item.fileName ?? item.name"><FileDown :size="15" />下载</a>
       <a v-if="item.kind === 'web'" :href="item.url ?? undefined" rel="noopener noreferrer" target="_blank" class="secondary-btn"><ExternalLink :size="15" />新窗口打开</a>
     </div>

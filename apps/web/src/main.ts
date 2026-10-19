@@ -2,15 +2,20 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import PrimeVue from 'primevue/config';
-import Aura from '@primeuix/themes/aura';
+import StudyTheme from './theme';
+import ConfirmationService from 'primevue/confirmationservice';
+import ToastService from 'primevue/toastservice';
 import './style.css';
 import './refinements.css';
+import './ui-system.css';
 
 createApp(App)
   .use(createPinia())
+  .use(ConfirmationService)
+  .use(ToastService)
   .use(PrimeVue, {
     theme: {
-      preset: Aura,
+      preset: StudyTheme,
       options: {
         darkModeSelector: false,
         cssLayer: false,

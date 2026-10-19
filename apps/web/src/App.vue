@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import {
-  AlignLeft, ArrowLeft, BookOpenText, Check, ChevronRight, Clock3, CloudUpload,
-  FileCode2, FilePlus2, FileText, FolderClosed, FolderPlus, Home, Link2,
-  Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, LogOut, ExternalLink, MoveRight, Download,
-} from 'lucide-vue-next';
+import { AlignLeft, ArrowLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, LogOut } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
 import TreeNode from './components/TreeNode.vue';
@@ -18,11 +14,23 @@ import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
+import PrimeMenu from 'primevue/menu';
+import ContextMenu from 'primevue/contextmenu';
+import ConfirmDialog from 'primevue/confirmdialog';
+import { useConfirm } from 'primevue/useconfirm';
+import Toast from 'primevue/toast';
+import FileUpload from 'primevue/fileupload';
+import { useToast } from 'primevue/usetoast';
 
 interface Heading { level: number; title: string; index: number }
 type ModalType = 'folder' | 'markdown' | 'richtext' | 'web' | 'rename' | 'move';
 const store = useKnowledgeStore();
 const account = useAccountStore();
+const confirm = useConfirm();
+const toast = useToast();
+const addMenuRef = ref<InstanceType<typeof PrimeMenu> | null>(null);
+const moreMenuRef = ref<InstanceType<typeof PrimeMenu> | null>(null);
+const contextMenuRef = ref<InstanceType<typeof ContextMenu> | null>(null);
 const modal = ref<ModalType | null>(null);
 const dialogVisible = computed({
   get: () => modal.value !== null,
@@ -33,15 +41,12 @@ const modalUrl = ref('');
 const modalParent = ref<string | null>(null);
 const modalItem = ref<KnowledgeItem | null>(null);
 const creating = ref(false);
-const showAdd = ref(false);
-const showActions = ref(false);
 const sidebarVisible = ref(true);
 const mobileSidebar = ref(false);
-const menu = ref<{ item: KnowledgeItem | null; x: number; y: number } | null>(null);
-const menuElement = ref<HTMLElement | null>(null);
+const menu = ref<{ item: KnowledgeItem | null } | null>(null);
 const moveDestination = ref('');
-const fileInput = ref<HTMLInputElement | null>(null);
-const searchInput = ref<HTMLInputElement | null>(null);
+const fileInput = ref<InstanceType<typeof FileUpload> | null>(null);
+const searchInput = ref<InstanceType<typeof InputText> | null>(null);
 const documentRef = ref<{ scrollToHeading: (i: number) => void } | null>(null);
 const outline = ref<Heading[]>([]);
 
@@ -55,7 +60,6 @@ const crumbs = computed(() => {
 });
 const pageName = computed(() => store.panel === 'home' ? '我的知识库' : store.panel === 'favorites' ? '我的收藏' : store.panel === 'recent' ? '最近访问' : store.panel === 'trash' ? '回收站' : store.panel === 'search' ? '搜索' : store.panel === 'settings' ? '系统设置' : active.value?.name ?? '知识库');
 const modalTitle = computed(() => ({ folder: '新建文件夹', markdown: '新建 Markdown', richtext: '新建富文本', web: '收藏网页', rename: '重命名', move: '移动到文件夹' } as Record<ModalType,string>)[modal.value ?? 'folder']);
-const menuKind = computed(() => menu.value?.item?.kind);
 const moveFolders = computed(() => store.items.filter((candidate) => {
   const item = modalItem.value;
   if (candidate.kind !== 'folder' || candidate.id === item?.id) return false;
@@ -83,7 +87,7 @@ function folderPath(folder: KnowledgeItem): string {
 }
 
 function openModal(kind: ModalType, parentId: string | null = null, item: KnowledgeItem | null = null) {
-  showAdd.value = false; menu.value = null; showActions.value = false;
+  menu.value = null;
   modal.value = kind; modalParent.value = parentId; modalItem.value = item;
   modalName.value = item?.name ?? (kind === 'folder' ? '新建文件夹' : kind === 'markdown' ? '未命名笔记' : kind === 'richtext' ? '未命名文档' : '网页收藏');
   modalUrl.value = item?.url ?? '';
@@ -107,26 +111,69 @@ async function submitModal() {
     }
   } finally { creating.value = false; }
 }
-function openUpload(parent: string | null = null) { modalParent.value = parent; showAdd.value = false; menu.value = null; fileInput.value?.click(); }
-async function handleFiles(event: Event) {
-  const input = event.target as HTMLInputElement;
-  for (const file of Array.from(input.files ?? [])) await store.upload(file, modalParent.value);
-  input.value = '';
+function openUpload(parent: string | null = null) { modalParent.value = parent; menu.value = null; fileInput.value?.choose(); }
+async function handleFiles(event: { files: File[] | File }) {
+  const files = Array.isArray(event.files) ? event.files : [event.files];
+  for (const file of files) await store.upload(file, modalParent.value);
+  fileInput.value?.clear();
   mobileSidebar.value = false;
 }
-function showMenu(item: KnowledgeItem | null, x: number, y: number) {
-  menu.value = { item, x: Math.max(8, x), y: Math.max(8, y) };
-  const openedMenu = menu.value;
-  showAdd.value = false;
-  showActions.value = false;
-  void nextTick(() => {
-    if (menu.value !== openedMenu || !menuElement.value) return;
-    const rect = menuElement.value.getBoundingClientRect();
-    menu.value = {
-      ...menu.value,
-      x: Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)),
-      y: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
-    };
+function showMenu(item: KnowledgeItem | null, event: MouseEvent) {
+  menu.value = { item };
+  contextMenuRef.value?.show(event);
+}
+const addItems = [
+  { label: '新建文件夹', command: () => openModal('folder') },
+  { label: 'Markdown 笔记', command: () => openModal('markdown') },
+  { label: '富文本文档', command: () => openModal('richtext') },
+  { label: '收藏网页', command: () => openModal('web') },
+  { separator: true },
+  { label: '上传文件', command: () => openUpload() },
+];
+const moreItems = computed(() => active.value ? [
+  { label: '重命名', command: () => openModal('rename', null, active.value) },
+  { label: active.value.starred ? '取消收藏' : '加入收藏', command: () => toggleStar() },
+  { label: '移动到文件夹', command: () => openModal('move', null, active.value) },
+  ...(active.value.fileName ? [{ label: '下载文件', command: () => downloadFile(active.value!) }] : []),
+  { separator: true },
+  { label: '移至回收站', command: () => removeActive() },
+] : []);
+const contextItems = computed(() => {
+  const item = menu.value?.item;
+  const add = !item || item.kind === 'folder' ? [
+    { label: '新建文件夹', command: () => openModal('folder', item?.id ?? null) },
+    { label: '新建 Markdown', command: () => openModal('markdown', item?.id ?? null) },
+    { label: '新建富文本', command: () => openModal('richtext', item?.id ?? null) },
+    { label: '收藏网页', command: () => openModal('web', item?.id ?? null) },
+    { label: '上传文件', command: () => openUpload(item?.id ?? null) },
+  ] : [];
+  if (!item) return add;
+  return [
+    ...add, ...(add.length ? [{separator:true}] : []),
+    { label: item.kind === 'folder' ? '展开或收起' : '打开文档', command: openMenuItem },
+    { label: '重命名', command: () => openModal('rename', null, item) },
+    { label: item.starred ? '取消收藏' : '加入收藏', command: () => toggleStar(item) },
+    { label: '移动到文件夹', command: () => openModal('move', null, item) },
+    ...(item.fileName ? [{ label: '下载文件', command: () => downloadFile(item) }] : []),
+    ...(item.kind === 'web' && item.url ? [{ label: '打开原网页', command: () => window.open(item.url!, '_blank', 'noopener,noreferrer') }] : []),
+    {separator: true},
+    { label: '移至回收站', command: () => requestDelete(item) },
+  ];
+});
+function downloadFile(item: KnowledgeItem) {
+  const link = document.createElement('a');
+  link.href = api.fileUrl(item.id, true);
+  link.download = item.fileName ?? item.name;
+  link.click();
+}
+function requestDelete(item: KnowledgeItem) {
+  menu.value = null;
+  confirm.require({
+    header: '移至回收站',
+    message: `确定将「${item.name}」${item.kind === 'folder' ? '及其子项' : ''}移入回收站？`,
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    acceptProps: { label: '移至回收站' },
+    accept: () => { void store.remove(item.id); },
   });
 }
 function openMenuItem() {
@@ -137,43 +184,15 @@ function openMenuItem() {
   store.open(item.id);
   mobileSidebar.value = false;
 }
-function closeContextMenu() { menu.value = null; }
-function onGlobalScroll(event: Event) {
-  if (!(event.target instanceof Node) || !menuElement.value?.contains(event.target)) closeContextMenu();
-}
-function onGlobalPointerDown(event: PointerEvent) {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  if (menu.value && !menuElement.value?.contains(target)) closeContextMenu();
-  if (showAdd.value && !target.closest('.add-menu, .sidebar-title-actions')) showAdd.value = false;
-  if (showActions.value && !target.closest('.more-anchor')) showActions.value = false;
-}
-function onGlobalContextMenu(event: MouseEvent) {
-  const target = event.target;
-  if (menu.value && (!(target instanceof Element) || !target.closest('.tree-line, .sidebar-tree, .context-menu'))) closeContextMenu();
-}
-
-function deleteMenuItem() {
-  const item = menu.value?.item;
-  if (!item) return;
-  menu.value = null;
-  if (window.confirm(`将「${item.name}」${item.kind === 'folder' ? '及其所有子项' : ''}移入回收站？`)) void store.remove(item.id);
-}
-function toggleStar() {
-  const item = menu.value?.item ?? active.value;
+function toggleStar(item: KnowledgeItem | null = active.value) {
   if (!item) return;
   void store.update(item.id, { starred: !item.starred });
-  menu.value = null; showActions.value = false;
+  menu.value = null;
 }
-function removeActive() {
-  const item = active.value;
-  if (!item) return;
-  if (window.confirm(`将「${item.name}」移入回收站？`)) void store.remove(item.id);
-  showActions.value = false;
-}
+function removeActive() { if (active.value) requestDelete(active.value); }
 function onKeydown(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); store.navigate('search'); void nextTick(() => searchInput.value?.focus()); }
-  if (event.key === 'Escape') { modal.value = null; menu.value = null; showAdd.value = false; showActions.value = false; mobileSidebar.value = false; }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); store.navigate('search'); void nextTick(() => searchInput.value?.$el?.focus()); }
+  if (event.key === 'Escape') { mobileSidebar.value = false; }
 }
 function go(panel: 'home' | 'recent' | 'favorites' | 'trash') { store.navigate(panel); mobileSidebar.value = false; outline.value = []; }
 function dropRoot(event: DragEvent) { const id = event.dataTransfer?.getData('text/plain'); if (id) void store.move(id, null); }
@@ -185,20 +204,18 @@ async function signOut() {
 function unauthorized() { account.user = null;store.reset(); }
 onMounted(async () => {
   window.addEventListener('keydown',onKeydown);
-  window.addEventListener('pointerdown', onGlobalPointerDown, true);
-  window.addEventListener('contextmenu', onGlobalContextMenu, true);
-  window.addEventListener('scroll', onGlobalScroll, true);
-  window.addEventListener('resize', closeContextMenu);
   window.addEventListener('studydocs:unauthorized',unauthorized);
   await account.bootstrap();
 });
 onUnmounted(() => {
   window.removeEventListener('keydown',onKeydown);
-  window.removeEventListener('pointerdown', onGlobalPointerDown, true);
-  window.removeEventListener('contextmenu', onGlobalContextMenu, true);
-  window.removeEventListener('scroll', onGlobalScroll, true);
-  window.removeEventListener('resize', closeContextMenu);
   window.removeEventListener('studydocs:unauthorized',unauthorized);
+});
+watch(() => store.toast, (value) => {
+  if (value) {
+    toast.add({ severity: 'success', summary: value, life: 3000 });
+    store.toast = '';
+  }
 });
 watch(() => account.user?.id, (id, oldId) => {
   if (id && id !== oldId) { store.reset(); void store.load(); }
@@ -208,53 +225,46 @@ watch(() => account.user?.id, (id, oldId) => {
 <template>
   <div v-if="!account.ready" class="auth-loading">正在加载拾页...</div>
   <AuthView v-else-if="!account.user" />
-  <div v-else class="app-shell" @click="menu = null; showActions = false; showAdd = false">
+  <div v-else class="app-shell">
     <aside class="icon-rail">
-      <button class="brand-mark" :title="account.site.siteName" @click.stop="go('home')"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="Logo" /><span v-else>拾</span></button>
+      <Button class="brand-mark" :title="account.site.siteName" @click.stop="go('home')"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="Logo" /><span v-else>拾</span></Button>
       <div class="rail-separator"></div>
-      <button class="rail-button" :class="{ active: store.panel === 'home' }" title="知识库首页" @click.stop="go('home')"><Home :size="21" :stroke-width="1.9" /></button>
-      <button class="rail-button" :class="{ active: store.panel === 'favorites' }" title="我的收藏" @click.stop="go('favorites')"><Star :size="21" :stroke-width="1.8" /></button>
-      <button class="rail-button" :class="{ active: store.panel === 'recent' }" title="最近访问" @click.stop="go('recent')"><Clock3 :size="21" :stroke-width="1.8" /></button>
-      <div class="rail-bottom"><button class="rail-button" title="系统设置与账号安全" :class="{ active: store.panel==='settings' }" @click.stop="store.navigate('settings')"><Settings2 :size="20" /></button><button class="rail-button" :class="{ active: store.panel === 'trash' }" title="回收站" @click.stop="go('trash')"><Trash2 :size="20" /></button><button class="avatar" :title="account.user.username + ' · 退出登录'" @click.stop="signOut">{{ account.user.username.slice(0,1).toUpperCase() }}</button></div>
+      <Button class="rail-button" :class="{ active: store.panel === 'home' }" title="知识库首页" @click.stop="go('home')"><Home :size="21" :stroke-width="1.9" /></Button>
+      <Button class="rail-button" :class="{ active: store.panel === 'favorites' }" title="我的收藏" @click.stop="go('favorites')"><Star :size="21" :stroke-width="1.8" /></Button>
+      <Button class="rail-button" :class="{ active: store.panel === 'recent' }" title="最近访问" @click.stop="go('recent')"><Clock3 :size="21" :stroke-width="1.8" /></Button>
+      <div class="rail-bottom"><Button class="rail-button" title="系统设置与账号安全" :class="{ active: store.panel==='settings' }" @click.stop="store.navigate('settings')"><Settings2 :size="20" /></Button><Button class="rail-button" :class="{ active: store.panel === 'trash' }" title="回收站" @click.stop="go('trash')"><Trash2 :size="20" /></Button><Button class="avatar" :title="account.user.username + ' · 退出登录'" @click.stop="signOut">{{ account.user.username.slice(0,1).toUpperCase() }}</Button></div>
     </aside>
 
     <aside class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar }" @click.stop>
       <div class="sidebar-inner">
-      <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><BookOpenText :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></button></div>
-      <button class="search-trigger" @click="store.navigate('search'); nextTick(() => searchInput?.focus())"><Search :size="16" />搜索文档<kbd>Ctrl K</kbd></button>
+      <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><BookOpenText :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
+      <Button class="search-trigger" @click="store.navigate('search'); nextTick(() => searchInput?.$el?.focus())"><Search :size="16" />搜索文档<kbd>Ctrl K</kbd></Button>
       
       <div class="side-nav">
-        <button :class="{ active: store.panel === 'home' }" @click="go('home')"><Home :size="17" />知识库首页</button>
-        <button :class="{ active: store.panel === 'favorites' }" @click="go('favorites')"><Star :size="17" />我的收藏 <span class="nav-count">{{ store.favorites.length }}</span></button>
-        <button :class="{ active: store.panel === 'recent' }" @click="go('recent')"><Clock3 :size="17" />最近访问</button>
+        <Button :class="{ active: store.panel === 'home' }" @click="go('home')"><Home :size="17" />知识库首页</Button>
+        <Button :class="{ active: store.panel === 'favorites' }" @click="go('favorites')"><Star :size="17" />我的收藏 <span class="nav-count">{{ store.favorites.length }}</span></Button>
+        <Button :class="{ active: store.panel === 'recent' }" @click="go('recent')"><Clock3 :size="17" />最近访问</Button>
       </div>
-      <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><button title="上传文件" @click="openUpload()"><Upload :size="16" /></button><button title="创建内容" @click.stop="showAdd = !showAdd"><Plus :size="17" /></button></div></div>
-      <div v-if="showAdd" class="add-menu floating-panel" @click.stop>
-        <button @click="openModal('folder')"><FolderPlus :size="16" />新建文件夹</button>
-        <button @click="openModal('markdown')"><FileCode2 :size="16" />Markdown 笔记</button>
-        <button @click="openModal('richtext')"><FileText :size="16" />富文本文档</button>
-        <button @click="openModal('web')"><Link2 :size="16" />收藏网页</button>
-        <div class="dropdown-divider"></div>
-        <button @click="openUpload()"><CloudUpload :size="16" />上传文件</button>
-      </div>
-      <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event.clientX, $event.clientY)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">右键新建文档</div></div>
+      <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><Button title="上传文件" @click="openUpload()"><Upload :size="16" /></Button><Button title="创建内容" @click.stop="addMenuRef?.toggle($event)"><Plus :size="17" /></Button></div></div>
+      <PrimeMenu ref="addMenuRef" :model="addItems" popup class="study-popup-menu" />
+      <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">右键新建文档</div></div>
       <div class="root-drop" @dragover.prevent @drop.prevent="dropRoot"><ArrowLeft :size="14" />拖到这里移至根目录</div>
-      <div class="sidebar-foot"><div class="sidebar-foot-icon"><Settings2 :size="16" /></div><div><strong>{{ account.user.username }}</strong><small>{{ account.user.role==='admin'?'管理员':'个人知识空间' }}</small></div><button class="icon-btn" title="退出登录" @click="signOut"><LogOut :size="16" /></button></div>
+      <div class="sidebar-foot"><div class="sidebar-foot-icon"><Settings2 :size="16" /></div><div><strong>{{ account.user.username }}</strong><small>{{ account.user.role==='admin'?'管理员':'个人知识空间' }}</small></div><Button class="icon-btn" title="退出登录" @click="signOut"><LogOut :size="16" /></Button></div>
       </div>
     </aside>
 
     <main class="main-area">
       <header class="topbar">
-        <button v-if="!sidebarVisible" class="icon-btn reopen" title="打开侧边栏" @click.stop="sidebarVisible = true"><PanelLeftOpen :size="19" /></button>
-        <button class="icon-btn mobile-menu-btn" title="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><Menu :size="20" /></button>
-        <div class="breadcrumbs"><button @click="go('home')">知识库</button><template v-if="store.panel === 'document' && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><button v-if="crumb.kind === 'folder'" @click="store.toggleFolder(crumb.id)">{{ crumb.name }}</button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
+        <Button v-if="!sidebarVisible" class="icon-btn reopen" title="打开侧边栏" @click.stop="sidebarVisible = true"><PanelLeftOpen :size="19" /></Button>
+        <Button class="icon-btn mobile-menu-btn" title="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><Menu :size="20" /></Button>
+        <div class="breadcrumbs"><Button @click="go('home')">知识库</Button><template v-if="store.panel === 'document' && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><Button v-if="crumb.kind === 'folder'" @click="store.toggleFolder(crumb.id)">{{ crumb.name }}</Button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
         <div class="topbar-right">
-          <button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); nextTick(() => searchInput?.focus())"><Search :size="19" /></button>
-          <template v-if="store.panel === 'document' && active"><div class="topbar-split"></div><button class="icon-btn star-toggle" :class="{ 'is-starred': active.starred }" :title="active.starred ? '取消收藏' : '收藏文档'" @click.stop="toggleStar"><Star :size="19" :fill="active.starred ? 'currentColor' : 'none'" /></button><div class="more-anchor"><button class="icon-btn" title="更多操作" @click.stop="showActions = !showActions"><MoreHorizontal :size="21" /></button><div v-if="showActions" class="more-popup floating-panel" @click.stop><button @click="openModal('rename', null, active)"><FileText :size="16" />重命名</button><button @click="toggleStar"><Star :size="16" />{{ active.starred ? '取消收藏' : '加入收藏' }}</button><a v-if="active.fileName" :href="`/api/items/${active.id}/file?download=1`"><Upload :size="16" class="rotate-180" />下载文件</a><button class="danger" @click="removeActive"><Trash2 :size="16" />移至回收站</button></div></div></template>
+          <Button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); nextTick(() => searchInput?.$el?.focus())"><Search :size="19" /></Button>
+          <template v-if="store.panel === 'document' && active"><div class="topbar-split"></div><Button class="icon-btn star-toggle" :class="{ 'is-starred': active.starred }" :title="active.starred ? '取消收藏' : '收藏文档'" @click.stop="toggleStar()"><Star :size="19" :fill="active.starred ? 'currentColor' : 'none'" /></Button><div class="more-anchor"><Button class="icon-btn" text title="更多操作" @click.stop="moreMenuRef?.toggle($event)"><MoreHorizontal :size="21" /></Button><PrimeMenu ref="moreMenuRef" :model="moreItems" popup class="study-popup-menu" /></div></template>
           
         </div>
       </header>
-      <div v-if="store.panel === 'search'" class="search-panel"><Search :size="21" /><input ref="searchInput" v-model="store.search" autofocus placeholder="搜索文档标题或正文内容..." /><button v-if="store.search" class="icon-btn" @click="store.search = ''"><X :size="17" /></button></div>
+      <div v-if="store.panel === 'search'" class="search-panel"><Search :size="21" /><InputText ref="searchInput" v-model="store.search" autofocus placeholder="搜索文档标题或正文内容..." /><Button v-if="store.search" class="icon-btn" @click="store.search = ''"><X :size="17" /></Button></div>
       <div class="main-scroll custom-scroll" :class="{ 'document-scroll': store.panel === 'document', 'has-search': store.panel === 'search' }">
         <SettingsView v-if="store.panel==='settings'" />
         <DocumentView v-else-if="store.panel === 'document' && active" :key="active.id" ref="documentRef" :item="active" @outline="outline = $event" />
@@ -264,30 +274,12 @@ watch(() => account.user?.id, (id, oldId) => {
 
     <aside v-if="store.panel === 'document' && active && (active.kind === 'markdown' || active.kind === 'richtext')" class="outline-sidebar">
       <div class="outline-header"><AlignLeft :size="17" /><span>文章目录</span></div>
-      <div class="outline-list custom-scroll"><button v-for="heading in outline" :key="heading.index" :class="`outline-h${heading.level}`" @click="documentRef?.scrollToHeading(heading.index)">{{ heading.title }}</button></div>
+      <div class="outline-list custom-scroll"><Button v-for="heading in outline" :key="heading.index" :class="`outline-h${heading.level}`" @click="documentRef?.scrollToHeading(heading.index)">{{ heading.title }}</Button></div>
     </aside>
 
-    <div v-if="menu" ref="menuElement" class="context-menu floating-panel" role="menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @click.stop>
-      <template v-if="!menu.item || menuKind === 'folder'">
-        <button role="menuitem" @click="openModal('folder', menu!.item?.id ?? null)"><FolderPlus :size="16" />新建文件夹</button>
-        <button role="menuitem" @click="openModal('markdown', menu!.item?.id ?? null)"><FileCode2 :size="16" />新建 Markdown</button>
-        <button role="menuitem" @click="openModal('richtext', menu!.item?.id ?? null)"><FileText :size="16" />新建富文本</button>
-        <button role="menuitem" @click="openModal('web', menu!.item?.id ?? null)"><Link2 :size="16" />收藏网页</button>
-        <button role="menuitem" @click="openUpload(menu!.item?.id ?? null)"><Upload :size="16" />上传文件</button>
-      </template>
-      <template v-if="menu.item">
-        <div class="dropdown-divider"></div>
-        <button role="menuitem" @click="openMenuItem"><FolderClosed v-if="menuKind === 'folder'" :size="16" /><FileText v-else :size="16" />{{ menuKind === 'folder' ? '展开或收起' : '打开文档' }}</button>
-        <button role="menuitem" @click="openModal('rename', null, menu!.item)"><FileText :size="16" />重命名</button>
-        <button role="menuitem" @click="toggleStar"><Star :size="16" />{{ menu.item.starred ? '取消收藏' : '加入收藏' }}</button>
-        <button role="menuitem" @click="openModal('move', null, menu!.item)"><MoveRight :size="16" />移动到...</button>
-        <a v-if="menu.item.fileName" :href="api.fileUrl(menu.item.id, true)" :download="menu.item.fileName ?? menu.item.name" role="menuitem" @click="menu = null"><Download :size="16" />下载文件</a>
-        <a v-if="menuKind === 'web' && menu.item.url" :href="menu.item.url || undefined" target="_blank" rel="noopener noreferrer" role="menuitem" @click="menu = null"><ExternalLink :size="16" />打开原网页</a>
-        <div class="dropdown-divider"></div>
-        <button role="menuitem" class="danger" @click="deleteMenuItem"><Trash2 :size="16" />移至回收站</button>
-      </template>
-    </div>
-
+    <ContextMenu ref="contextMenuRef" :model="contextItems" class="study-popup-menu" />
+    <ConfirmDialog class="study-confirm-dialog" />
+    <Toast position="bottom-center" />
     <Dialog v-model:visible="dialogVisible" modal :draggable="false" :closable="!creating"
       :close-on-escape="!creating" :header="modalTitle" class="study-dialog"
       :style="{ width: 'min(480px, calc(100vw - 32px))' }">
@@ -326,8 +318,8 @@ watch(() => account.user?.id, (id, oldId) => {
         </div>
       </form>
     </Dialog>
-    <input ref="fileInput" class="visually-hidden" type="file" multiple accept=".md,.markdown,.html,.htm,.pdf,.docx" @change="handleFiles" />
-    <Transition name="toast"><div v-if="store.toast" class="toast-msg"><span class="toast-icon"><Check :size="15" /></span>{{ store.toast }}<button @click="store.toast = ''"><X :size="14" /></button></div></Transition>
+    <FileUpload ref="fileInput" class="visually-hidden" mode="basic" auto custom-upload multiple accept=".md,.markdown,.html,.htm,.pdf,.docx" @uploader="handleFiles" />
+
     <div v-if="mobileSidebar" class="mobile-shade" @click="mobileSidebar = false"></div>
   </div>
 </template>
