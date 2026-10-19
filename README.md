@@ -1,6 +1,15 @@
-# 拾页 StudyDocs v0.3.1
+# 拾页 StudyDocs v0.3.2
 
 简洁的个人学习文档管理系统：**pnpm Monorepo + Vue 3 + TypeScript + NestJS + SQLite + 可配置 OSS**。界面借鉴语雀的知识库阅读方式，不使用后台管理模板。保留 v0.2.0 的目录树、Markdown、富文本、PDF/DOCX 在线预览与宽屏阅读布局。
+
+## UI 组件与弹窗优化（v0.3.2）
+
+- 前台基础 UI 采用 **PrimeVue 4.5.5（MIT）+ Aura**，不采用 Element Plus 或后台管理模板。
+- 新建、重命名、移动弹窗已使用 PrimeVue Dialog、InputText、Select、Button，统一内容与底部操作区间距，解决文本和按钮拥挤。
+- OSS 存储配置使用统一的表单弹窗；支持长表单滚动及小屏单列排列。
+- 登录输入框及主要提交按钮也使用 PrimeVue，Markdown（md-editor-v3）、富文本（Tiptap）、PDF/Word 预览仍沿用原有编辑预览组件。
+- 本次不修改数据库、文档存储、账号或文件上传逻辑；菜单树与业务页面可后续分阶段迁移，避免一次性重写。
+- **安装新依赖**：`pnpm install --no-frozen-lockfile`，安装成功后请提交更新的 `pnpm-lock.yaml`。新依赖未在离线执行环境中完成安装与真实浏览器编译，建议运行 `pnpm typecheck && pnpm build`。
 
 ## v0.3.1 界面与目录操作优化
 

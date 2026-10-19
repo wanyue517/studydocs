@@ -3,6 +3,11 @@ import { computed, onMounted, ref } from 'vue';
 import { Check, Database, ExternalLink, HardDrive, ImagePlus, Plus, ShieldCheck, Settings2, Trash2 } from 'lucide-vue-next';
 import { api, type SiteSettings, type StorageProfile, type StorageInput, type Provider } from '../lib/api';
 import { useAccountStore } from '../stores/account';
+import Dialog from 'primevue/dialog';
+import Button from 'primevue/button';
+import InputText from 'primevue/inputtext';
+import Select from 'primevue/select';
+import ToggleSwitch from 'primevue/toggleswitch';
 const account = useAccountStore();
 const tab = ref<'site'|'storage'|'account'>('site');
 const oldPassword = ref('');
@@ -16,6 +21,7 @@ const logoVersion = ref(Date.now());
 const error = ref('');
 const message = ref('');
 const labels:Record<Provider,string> = {local:'本地文件系统',r2:'Cloudflare R2',minio:'MinIO',qiniu:'七牛云 Kodo',aliyun:'阿里云 OSS'};
+const providerOptions = (Object.entries(labels) as [Provider, string][]).map(([value, label]) => ({ value, label }));
 const empty:StorageInput = {name:'',provider:'r2',endpoint:'',region:'auto',bucket:'',prefix:'studydocs',accessKeyId:'',secretAccessKey:'',forcePathStyle:false};
 const profile = ref<StorageInput>({...empty});
 const active = computed(() => profiles.value.find((x)=>x.active));
@@ -80,7 +86,7 @@ async function remove(id:string) {
           <div class="settings-card-title"><h2>修改登录密码</h2><p>当前账号：{{ account.user.username }}。修改后其他浏览器将需要重新登录。</p></div>
           <label>当前密码<input v-model="oldPassword" type="password" required autocomplete="current-password" /></label>
           <label>新密码<input v-model="newPassword" type="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="至少 10 位字符" /></label>
-          <div class="settings-actions"><button class="settings-primary" type="submit" :disabled="saving">更新密码</button></div>
+          <div class="settings-actions"><Button type="submit" label="更新密码" :loading="saving" :disabled="saving" /></div>
         </form>
       </template>
       <template v-if="tab==='site' && site && account.user.role==='admin'">
@@ -95,24 +101,41 @@ async function remove(id:string) {
           <div class="settings-card-title"><h2>用户与安全</h2><p>注册开关即时生效；关闭后仅现有账号可登录。</p></div>
           <label class="settings-toggle"><span><strong>允许用户自行注册</strong><small>关闭后注册接口也将拒绝请求</small></span><input v-model="site.allowRegistration" type="checkbox" /></label>
           <label>单文件上传大小上限 (MB)<input v-model.number="site.maxUploadMb" type="number" min="1" max="25" style="max-width:160px" /></label>
-          <div class="settings-actions"><button class="settings-primary" type="submit" :disabled="saving">{{ saving?'保存中...':'保存网站设置' }}</button></div>
+          <div class="settings-actions"><Button type="submit" label="保存网站设置" :loading="saving" :disabled="saving" /></div>
         </form>
       </template>
       <template v-if="tab==='storage' && account.user.role==='admin'">
         <div class="settings-card"><div class="settings-card-title"><h2>默认存储</h2><p>仅影响之后上传的文件；旧文件继续从原存储读取，不迁移。</p></div>
           <div class="current-storage"><HardDrive :size="23" /><div><strong>{{ active?.name??'尚未配置' }}</strong><small>{{ active?labels[active.provider]:'请选择一个有效存储档案' }}</small></div><span class="active-label">正在使用</span></div>
-          <div class="storage-section-heading"><strong>已配置的存储空间</strong><button class="settings-add" @click="begin()"><Plus :size="15" />添加存储</button></div>
+          <div class="storage-section-heading"><strong>已配置的存储空间</strong><Button class="settings-add" label="添加存储" size="small" outlined @click="begin()" /></div>
           <div v-for="p in profiles" :key="p.id" class="storage-row"><span class="storage-row-icon"><Database :size="18" /></span><div class="storage-details"><strong>{{ p.name }}</strong><small>{{ labels[p.provider] }} · {{ p.bucket||'本地目录' }} <span v-if="p.active">· 默认</span></small></div><div class="storage-actions"><button @click="begin(p)">编辑</button><button @click="test(p.id)">测试</button><button v-if="!p.active" @click="activate(p.id)">设为默认</button><button v-if="!p.active" title="删除配置" @click="remove(p.id)"><Trash2 :size="15" /></button></div></div>
           <p class="settings-hint"><ShieldCheck :size="15" />密钥在服务器加密存储，不能从设置页面读取。请永久保管服务端的 STORAGE_ENCRYPTION_KEY。</p>
         </div>
-        <form v-if="formOpen" class="settings-card" @submit.prevent="saveProfile">
-          <div class="settings-card-title"><h2>{{ editingId?'编辑存储配置':'新增存储配置' }}</h2><p>使用私有 Bucket。云存储上传、读取与删除均由 NestJS 服务端执行。</p></div>
-          <label>配置名称<input v-model="profile.name" required placeholder="例如：R2 主存储" /></label>
-          <label>存储厂商<select v-model="profile.provider"><option v-for="(name,key) in labels" :key="key" :value="key">{{ name }}</option></select></label>
-          <template v-if="profile.provider!=='local'"><div class="form-two"><label>Endpoint<input v-model="profile.endpoint" type="url" required placeholder="https://..." /></label><label>Region<input v-model="profile.region" required placeholder="auto / cn-east-1" /></label></div><div class="form-two"><label>Bucket<input v-model="profile.bucket" required /></label><label>对象目录前缀<input v-model="profile.prefix" placeholder="studydocs" /></label></div><label>Access Key ID<input v-model="profile.accessKeyId" required autocomplete="off" /></label><label>Secret Access Key<input v-model="profile.secretAccessKey" type="password" autocomplete="new-password" :required="!editingId" :placeholder="editingId?'留空表示不修改':'请输入 Secret Key'" /></label><label class="settings-toggle"><span><strong>Path-style 地址</strong><small>MinIO 通常启用，R2/七牛根据 Endpoint 配置</small></span><input v-model="profile.forcePathStyle" type="checkbox" /></label></template>
-          <p v-else class="settings-hint">本地上传目录位于服务端 STORAGE_DIR/uploads，不需要额外访问密钥。</p>
-          <div class="settings-actions"><button type="button" class="settings-secondary" @click="cancelForm">取消</button><button type="submit" class="settings-primary" :disabled="saving">{{ saving?'保存中...':'保存存储档案' }}</button></div>
-        </form>
+        <Dialog v-model:visible="formOpen" modal :draggable="false" :closable="!saving"
+          :header="editingId ? '编辑存储配置' : '新增存储配置'" class="study-dialog storage-dialog"
+          :style="{ width: 'min(660px, calc(100vw - 32px))' }" @hide="cancelForm">
+          <form class="study-dialog-form storage-dialog-form" @submit.prevent="saveProfile">
+            <div class="study-field"><label for="storage-name">配置名称</label><InputText id="storage-name" v-model="profile.name" required maxlength="140" placeholder="例如：R2 主存储" class="study-dialog-input" /></div>
+            <div class="study-field"><label for="storage-provider">存储厂商</label><Select input-id="storage-provider" v-model="profile.provider" :options="providerOptions" option-label="label" option-value="value" class="study-dialog-input" :disabled="!!editingId" /></div>
+            <template v-if="profile.provider !== 'local'">
+              <div class="study-field-grid">
+                <div class="study-field"><label for="storage-endpoint">服务地址</label><InputText id="storage-endpoint" v-model="profile.endpoint" type="url" required placeholder="https://..." class="study-dialog-input" /></div>
+                <div class="study-field"><label for="storage-region">Region</label><InputText id="storage-region" v-model="profile.region" required placeholder="auto" class="study-dialog-input" /></div>
+              </div>
+              <div class="study-field-grid">
+                <div class="study-field"><label for="storage-bucket">Bucket</label><InputText id="storage-bucket" v-model="profile.bucket" required class="study-dialog-input" /></div>
+                <div class="study-field"><label for="storage-prefix">对象目录前缀</label><InputText id="storage-prefix" v-model="profile.prefix" placeholder="studydocs" class="study-dialog-input" /></div>
+              </div>
+              <div class="study-field"><label for="storage-key">Access Key ID</label><InputText id="storage-key" v-model="profile.accessKeyId" required autocomplete="off" class="study-dialog-input" /></div>
+              <div class="study-field"><label for="storage-secret">Secret Access Key</label><InputText id="storage-secret" v-model="profile.secretAccessKey" type="password" autocomplete="new-password" :required="!editingId" :placeholder="editingId ? '留空表示不修改' : '请输入 Secret Key'" class="study-dialog-input" /></div>
+              <div class="study-switch-row"><div><strong>Path-style 地址</strong><small>MinIO 通常需要开启</small></div><ToggleSwitch input-id="storage-path-style" v-model="profile.forcePathStyle" /></div>
+            </template>
+            <div class="study-dialog-actions">
+              <Button type="button" label="取消" severity="secondary" outlined :disabled="saving" @click="cancelForm" />
+              <Button type="submit" :loading="saving" label="保存配置" :disabled="saving" />
+            </div>
+          </form>
+        </Dialog>
         <div class="settings-info"><ExternalLink :size="16" />已被文档引用的存储配置不可删除；修改 Bucket 或路径可能导致旧文件失联。</div>
       </template>
     </template>

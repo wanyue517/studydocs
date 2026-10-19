@@ -165,3 +165,32 @@ body, .main-area, .document-view { color: var(--ink); }
 
 /* 删除首页卡片的冗余副标题后，收紧卡片高度。 */
 .quick-grid button { min-height: 112px; justify-content: center; }
+
+/* PrimeVue Aura: consistent, spacious dialog layout. */
+.study-dialog.p-dialog { border: 1px solid #dce4ee; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 70px rgb(19 34 56 / 20%); }
+.study-dialog .p-dialog-header { padding: 22px 26px 14px; color: #243449; font-size: 18px; font-weight: 650; }
+.study-dialog .p-dialog-content { padding: 6px 26px 26px; overflow-y: auto; max-height: min(72vh, 660px); }
+.study-dialog-form { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.study-field { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.study-field label { color: #394b60; font-size: 13px; font-weight: 600; }
+.study-dialog-input, .study-field .p-inputtext, .study-field .p-select { width: 100%; min-width: 0; min-height: 42px; color: #203047; }
+.study-dialog-item-name { min-height: 42px; padding: 10px 12px; border: 1px solid #dfe6ef; border-radius: 8px; background: #f7f9fc; color: #31435c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study-dialog-location { margin: 0; color: #56677b; font-size: 12px; line-height: 1.6; }
+.study-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 6px; padding-top: 20px; border-top: 1px solid #e8edf3; }
+.study-dialog-actions .p-button { min-width: 96px; height: 40px; justify-content: center; }
+.study-field-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; }
+.study-switch-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 4px 0; }
+.study-switch-row strong { display: block; font-size: 13px; color: #34465e; }
+.study-switch-row small { display: block; margin-top: 5px; font-size: 12px; color: #67788c; }
+.storage-dialog .study-dialog-form { gap: 18px; }
+.settings-actions .p-button { min-height: 40px; min-width: 112px; }
+.storage-section-heading .p-button { min-height: 36px; }
+.auth-card .p-inputtext { width: 100%; }
+.auth-card .p-button.auth-submit { justify-content: center; color: #fff; }
+@media (max-width: 580px) {
+  .study-dialog .p-dialog-header { padding: 20px 18px 12px; }
+  .study-dialog .p-dialog-content { padding: 8px 18px 20px; max-height: 75vh; }
+  .study-field-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .study-dialog-actions { gap: 10px; }
+  .study-dialog-actions .p-button { flex: 1 1 0; min-width: 0; }
+}

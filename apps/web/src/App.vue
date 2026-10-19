@@ -14,12 +14,20 @@ import AuthView from './components/AuthView.vue';
 import SettingsView from './components/SettingsView.vue';
 import { useAccountStore } from './stores/account';
 import { api } from './lib/api';
+import Dialog from 'primevue/dialog';
+import Button from 'primevue/button';
+import InputText from 'primevue/inputtext';
+import Select from 'primevue/select';
 
 interface Heading { level: number; title: string; index: number }
 type ModalType = 'folder' | 'markdown' | 'richtext' | 'web' | 'rename' | 'move';
 const store = useKnowledgeStore();
 const account = useAccountStore();
 const modal = ref<ModalType | null>(null);
+const dialogVisible = computed({
+  get: () => modal.value !== null,
+  set: (visible: boolean) => { if (!visible && !creating.value) modal.value = null; },
+});
 const modalName = ref('');
 const modalUrl = ref('');
 const modalParent = ref<string | null>(null);
@@ -59,6 +67,10 @@ const moveFolders = computed(() => store.items.filter((candidate) => {
   }
   return true;
 }).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')));
+const moveOptions = computed(() => [
+  { label: '根目录', value: '' },
+  ...moveFolders.value.map((folder) => ({ label: folderPath(folder), value: folder.id })),
+]);
 function folderPath(folder: KnowledgeItem): string {
   const parts = [folder.name];
   let parent = folder.parentId;
@@ -276,20 +288,44 @@ watch(() => account.user?.id, (id, oldId) => {
       </template>
     </div>
 
-    <div v-if="modal" class="modal-backdrop" @click.self="modal = null">
-      <form v-if="modal === 'move'" class="create-dialog" @submit.prevent="submitModal">
-        <div class="modal-header"><div class="modal-symbol"><MoveRight :size="21" /></div><button type="button" class="icon-btn" aria-label="关闭" @click="modal = null"><X :size="18" /></button></div>
-        <h2>移动到文件夹</h2>
-        <p class="move-item-name">{{ modalItem?.name }}</p>
-        <label for="move-target">目标位置</label>
-        <select id="move-target" v-model="moveDestination" class="move-select">
-          <option value="">根目录</option>
-          <option v-for="folder in moveFolders" :key="folder.id" :value="folder.id">{{ folderPath(folder) }}</option>
-        </select>
-        <div class="dialog-actions"><button type="button" class="secondary-btn" @click="modal = null">取消</button><button type="submit" class="primary-btn" :disabled="creating">{{ creating ? '移动中...' : '确认移动' }}</button></div>
+    <Dialog v-model:visible="dialogVisible" modal :draggable="false" :closable="!creating"
+      :close-on-escape="!creating" :header="modalTitle" class="study-dialog"
+      :style="{ width: 'min(480px, calc(100vw - 32px))' }">
+      <form class="study-dialog-form" @submit.prevent="submitModal">
+        <template v-if="modal === 'move'">
+          <div class="study-field">
+            <label>当前项目</label>
+            <div class="study-dialog-item-name" :title="modalItem?.name">{{ modalItem?.name }}</div>
+          </div>
+          <div class="study-field">
+            <label for="move-target">目标位置</label>
+            <Select input-id="move-target" v-model="moveDestination" :options="moveOptions"
+              option-label="label" option-value="value" filter class="study-dialog-input" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="study-field">
+            <label for="new-name">{{ modal === 'folder' ? '文件夹名称' : '名称' }}</label>
+            <InputText id="new-name" v-model="modalName" autofocus maxlength="140" required
+              placeholder="输入名称" class="study-dialog-input" />
+          </div>
+          <div v-if="modal === 'web'" class="study-field">
+            <label for="new-url">网页地址</label>
+            <InputText id="new-url" v-model="modalUrl" type="url" required
+              placeholder="https://example.com" class="study-dialog-input" />
+          </div>
+          <p v-if="modal !== 'rename'" class="study-dialog-location">
+            保存到：{{ modalParent ? store.items.find((x) => x.id === modalParent)?.name ?? '根目录' : '根目录' }}
+          </p>
+        </template>
+        <div class="study-dialog-actions">
+          <Button type="button" label="取消" severity="secondary" outlined :disabled="creating" @click="modal = null" />
+          <Button type="submit" :loading="creating"
+            :disabled="creating || (modal !== 'move' && (!modalName.trim() || (modal === 'web' && !modalUrl.trim())))"
+            :label="modal === 'move' ? '确认移动' : modal === 'rename' ? '保存修改' : '确认创建'" />
+        </div>
       </form>
-      <form v-else class="create-dialog" @submit.prevent="submitModal"><div class="modal-header"><div class="modal-symbol"><FolderPlus v-if="modal === 'folder'" :size="21" /><FileCode2 v-else-if="modal === 'markdown'" :size="21" /><Link2 v-else-if="modal === 'web'" :size="21" /><FileText v-else :size="21" /></div><button type="button" class="icon-btn" aria-label="关闭" @click="modal = null"><X :size="18" /></button></div><h2>{{ modalTitle }}</h2><label for="new-name">{{ modal === 'folder' ? '文件夹名称' : '名称' }}</label><input id="new-name" v-model="modalName" autofocus maxlength="140" required placeholder="输入名称" /><template v-if="modal === 'web'"><label for="new-url">网页地址</label><input id="new-url" v-model="modalUrl" type="url" required placeholder="https://example.com" /></template><div v-if="modal !== 'rename'" class="dialog-location">保存到：{{ modalParent ? store.items.find((x) => x.id === modalParent)?.name ?? '根目录' : '根目录' }}</div><div class="dialog-actions"><button type="button" class="secondary-btn" @click="modal = null">取消</button><button type="submit" :disabled="!modalName.trim() || (modal === 'web' && !modalUrl.trim()) || creating" class="primary-btn">{{ creating ? '正在创建...' : modal === 'rename' ? '保存修改' : '确认创建' }}</button></div></form>
-    </div>
+    </Dialog>
     <input ref="fileInput" class="visually-hidden" type="file" multiple accept=".md,.markdown,.html,.htm,.pdf,.docx" @change="handleFiles" />
     <Transition name="toast"><div v-if="store.toast" class="toast-msg"><span class="toast-icon"><Check :size="15" /></span>{{ store.toast }}<button @click="store.toast = ''"><X :size="14" /></button></div></Transition>
     <div v-if="mobileSidebar" class="mobile-shade" @click="mobileSidebar = false"></div>
