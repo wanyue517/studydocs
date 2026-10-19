@@ -21,6 +21,10 @@ function dragStart(event: DragEvent) { event.dataTransfer?.setData('text/plain',
 function drop(event: DragEvent) {
   over.value = false;
   if (props.item.kind !== 'folder') return;
+  if (event.dataTransfer?.files.length) {
+    for (const file of Array.from(event.dataTransfer.files)) void store.upload(file, props.item.id);
+    return;
+  }
   const id = event.dataTransfer?.getData('text/plain');
   if (id) void store.move(id, props.item.id);
 }

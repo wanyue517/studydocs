@@ -44,13 +44,49 @@ export const api = {
   delete: (id: string) => request<void>(`/items/${id}`, { method: 'DELETE' }),
   restore: (id: string) => request<KnowledgeItem>(`/items/${id}/restore`, { method: 'POST' }),
   forever: (id: string) => request<void>(`/items/${id}/forever`, { method: 'DELETE' }),
-  async upload(file: File, parentId: string | null) {
+  async upload(file: File, parentId: string | null, onProgress?: (loaded: number, total: number) => void) {
     const form = new FormData();
     form.append('file', file, file.name);
     // 独立 UTF-8 表单字段，避免 multipart 文件头里的 filename 被 Busboy 按 Latin-1 解读。
     form.append('fileName', file.name);
     if (parentId) form.append('parentId', parentId);
-    return request<KnowledgeItem>('/items/upload/file', { method: 'POST', body: form });
+    return new Promise<KnowledgeItem>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/items/upload/file');
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (event) => onProgress?.(event.loaded, event.lengthComputable ? event.total : file.size);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText) as KnowledgeItem); }
+          catch { reject(new Error('上传响应无法解析')); }
+        } else {
+          if (xhr.status === 401) window.dispatchEvent(new Event('studydocs:unauthorized'));
+          let message = `上传失败（${xhr.status}）`;
+          try { const info = JSON.parse(xhr.responseText); message = Array.isArray(info.message) ? info.message.join('，') : info.message || message; } catch { /* ignore */ }
+          reject(new ApiError(message, xhr.status));
+        }
+      };
+      xhr.onerror = () => reject(new Error('网络连接中断，上传失败'));
+      xhr.send(form);
+    });
+  },
+  download(id: string, onProgress?: (loaded: number, total: number) => void) {
+    return new Promise<Blob>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', `/api/items/${id}/file?download=1`);
+      xhr.responseType = 'blob';
+      xhr.withCredentials = true;
+      xhr.onprogress = (event) => onProgress?.(event.loaded, event.lengthComputable ? event.total : 0);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response as Blob);
+        else {
+          if (xhr.status === 401) window.dispatchEvent(new Event('studydocs:unauthorized'));
+          reject(new ApiError(`下载失败（${xhr.status}）`, xhr.status));
+        }
+      };
+      xhr.onerror = () => reject(new Error('网络连接中断，下载失败'));
+      xhr.send();
+    });
   },
   fileUrl: (id: string, download = false) => `/api/items/${id}/file${download ? '?download=1' : ''}`,
 };

@@ -8,6 +8,7 @@ import ToastService from 'primevue/toastservice';
 import './style.css';
 import './refinements.css';
 import './ui-system.css';
+import './feature.css';
 
 createApp(App)
   .use(createPinia())

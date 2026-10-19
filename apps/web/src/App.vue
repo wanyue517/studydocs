@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { AlignLeft, ArrowLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, LogOut } from 'lucide-vue-next';
+import { AlignLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, ListChecks } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
 import TreeNode from './components/TreeNode.vue';
 import CollectionView from './components/CollectionView.vue';
+import HomeView from './components/HomeView.vue';
+import TransferView from './components/TransferView.vue';
+import TransferFloat from './components/TransferFloat.vue';
 import DocumentView from './components/DocumentView.vue';
 import AuthView from './components/AuthView.vue';
 import SettingsView from './components/SettingsView.vue';
 import { useAccountStore } from './stores/account';
-import { api } from './lib/api';
+import { useTransferStore } from './stores/transfers';
+import roseImage from './assets/gold-rose.webp';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
@@ -26,10 +30,12 @@ interface Heading { level: number; title: string; index: number }
 type ModalType = 'folder' | 'markdown' | 'richtext' | 'web' | 'rename' | 'move';
 const store = useKnowledgeStore();
 const account = useAccountStore();
+const transfers = useTransferStore();
 const confirm = useConfirm();
 const toast = useToast();
 const addMenuRef = ref<InstanceType<typeof PrimeMenu> | null>(null);
 const moreMenuRef = ref<InstanceType<typeof PrimeMenu> | null>(null);
+const accountMenuRef = ref<InstanceType<typeof PrimeMenu> | null>(null);
 const contextMenuRef = ref<InstanceType<typeof ContextMenu> | null>(null);
 const modal = ref<ModalType | null>(null);
 const dialogVisible = computed({
@@ -49,6 +55,8 @@ const fileInput = ref<InstanceType<typeof FileUpload> | null>(null);
 const searchInput = ref<InstanceType<typeof InputText> | null>(null);
 const documentRef = ref<{ scrollToHeading: (i: number) => void } | null>(null);
 const outline = ref<Heading[]>([]);
+const sidebarDragOver = ref(false);
+let sidebarDragDepth = 0;
 
 const roots = computed(() => store.items.filter((x) => !x.parentId).sort((a,b) => Number(b.kind === 'folder') - Number(a.kind === 'folder') || a.name.localeCompare(b.name, 'zh-CN')));
 const active = computed(() => store.active);
@@ -58,7 +66,7 @@ const crumbs = computed(() => {
   while (current) { list.unshift(current); current = store.items.find((x) => x.id === current?.parentId) ?? null; }
   return list;
 });
-const pageName = computed(() => store.panel === 'home' ? '我的知识库' : store.panel === 'favorites' ? '我的收藏' : store.panel === 'recent' ? '最近访问' : store.panel === 'trash' ? '回收站' : store.panel === 'search' ? '搜索' : store.panel === 'settings' ? '系统设置' : active.value?.name ?? '知识库');
+const pageName = computed(() => store.panel === 'home' ? '我的知识库' : store.panel === 'favorites' ? '我的收藏' : store.panel === 'recent' ? '最近访问' : store.panel === 'trash' ? '回收站' : store.panel === 'search' ? '搜索' : store.panel === 'settings' ? '系统设置' : store.panel === 'transfers' ? '任务管理' : active.value?.name ?? '知识库');
 const modalTitle = computed(() => ({ folder: '新建文件夹', markdown: '新建 Markdown', richtext: '新建富文本', web: '收藏网页', rename: '重命名', move: '移动到文件夹' } as Record<ModalType,string>)[modal.value ?? 'folder']);
 const moveFolders = computed(() => store.items.filter((candidate) => {
   const item = modalItem.value;
@@ -168,10 +176,7 @@ const contextItems = computed(() => {
   ];
 });
 function downloadFile(item: KnowledgeItem) {
-  const link = document.createElement('a');
-  link.href = api.fileUrl(item.id, true);
-  link.download = item.fileName ?? item.name;
-  link.click();
+  void transfers.download(item);
 }
 function requestDelete(item: KnowledgeItem) {
   menu.value = null;
@@ -202,12 +207,29 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') { mobileSidebar.value = false; }
 }
 function go(panel: 'home' | 'recent' | 'favorites' | 'trash') { store.navigate(panel); mobileSidebar.value = false; outline.value = []; }
-function dropRoot(event: DragEvent) { const id = event.dataTransfer?.getData('text/plain'); if (id) void store.move(id, null); }
+function enterSidebar(event: DragEvent) { if (!Array.from(event.dataTransfer?.types ?? []).some((type) => type === 'text/plain' || type === 'Files')) return; sidebarDragDepth++; sidebarDragOver.value = true; }
+function leaveSidebar() { sidebarDragDepth = Math.max(0, sidebarDragDepth - 1); if (!sidebarDragDepth) sidebarDragOver.value = false; }
+function dropRoot(event: DragEvent) {
+  sidebarDragDepth = 0; sidebarDragOver.value = false;
+  if (event.target instanceof Element && event.target.closest('.tree-line')) return;
+  if (event.dataTransfer?.files.length) {
+    for (const file of Array.from(event.dataTransfer.files)) void store.upload(file, null);
+    return;
+  }
+  const id = event.dataTransfer?.getData('text/plain');
+  if (id) void store.move(id, null);
+}
 async function signOut() {
   await account.logout();
   store.reset();
+  transfers.setOwner(null);
   menu.value = null;
 }
+const accountItems = computed(() => [
+  { label: account.user?.username ?? '账户', disabled: true },
+  { separator: true },
+  { label: '退出登录', command: () => { void signOut(); } },
+]);
 function unauthorized() { account.user = null;store.reset(); }
 onMounted(async () => {
   window.addEventListener('keydown',onKeydown);
@@ -225,6 +247,7 @@ watch(() => store.toast, (value) => {
   }
 });
 watch(() => account.user?.id, (id, oldId) => {
+  transfers.setOwner(id ?? null);
   if (id && id !== oldId) { store.reset(); void store.load(); }
 });
 </script>
@@ -232,31 +255,24 @@ watch(() => account.user?.id, (id, oldId) => {
 <template>
   <div v-if="!account.ready" class="auth-loading">正在加载拾页...</div>
   <AuthView v-else-if="!account.user" />
-  <div v-else class="app-shell">
+  <div v-else class="app-shell" :class="{ 'has-global-rose': store.panel !== 'home' }">
+    <img v-if="store.panel !== 'home'" class="global-rose-watermark" :src="roseImage" alt="" aria-hidden="true" />
     <aside class="icon-rail">
       <Button class="brand-mark" :title="account.site.siteName" @click.stop="go('home')"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="Logo" /><span v-else>拾</span></Button>
       <div class="rail-separator"></div>
       <Button class="rail-button" :class="{ active: store.panel === 'home' }" title="知识库首页" @click.stop="go('home')"><Home :size="21" :stroke-width="1.9" /></Button>
       <Button class="rail-button" :class="{ active: store.panel === 'favorites' }" title="我的收藏" @click.stop="go('favorites')"><Star :size="21" :stroke-width="1.8" /></Button>
       <Button class="rail-button" :class="{ active: store.panel === 'recent' }" title="最近访问" @click.stop="go('recent')"><Clock3 :size="21" :stroke-width="1.8" /></Button>
-      <div class="rail-bottom"><Button class="rail-button" title="系统设置与账号安全" :class="{ active: store.panel==='settings' }" @click.stop="store.navigate('settings')"><Settings2 :size="20" /></Button><Button class="rail-button" :class="{ active: store.panel === 'trash' }" title="回收站" @click.stop="go('trash')"><Trash2 :size="20" /></Button><Button class="avatar" :title="account.user.username + ' · 退出登录'" @click.stop="signOut">{{ account.user.username.slice(0,1).toUpperCase() }}</Button></div>
+      <Button class="rail-button" :class="{ active: store.panel === 'transfers' }" title="任务管理" @click.stop="store.navigate('transfers')"><ListChecks :size="21" :stroke-width="1.8" /></Button>
+      <div class="rail-bottom"><Button class="rail-button" title="系统设置与账号安全" :class="{ active: store.panel==='settings' }" @click.stop="store.navigate('settings')"><Settings2 :size="20" /></Button><Button class="rail-button" :class="{ active: store.panel === 'trash' }" title="回收站" @click.stop="go('trash')"><Trash2 :size="20" /></Button><Button class="avatar" :title="account.user.username + ' · 账户菜单'" aria-label="打开账户菜单" aria-haspopup="menu" @click.stop="accountMenuRef?.toggle($event)">{{ account.user.username.slice(0,1).toUpperCase() }}</Button><PrimeMenu ref="accountMenuRef" :model="accountItems" popup class="study-popup-menu account-popup-menu" /></div>
     </aside>
 
-    <aside class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar }" @click.stop>
+    <aside class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar, 'sidebar-drag-over': sidebarDragOver }" @click.stop @dragenter="enterSidebar" @dragleave="leaveSidebar" @dragover.prevent @drop.prevent="dropRoot">
       <div class="sidebar-inner">
       <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><BookOpenText :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
-      <Button class="search-trigger" @click="store.navigate('search'); focusSearch()"><Search :size="16" />搜索文档<kbd>Ctrl K</kbd></Button>
-      
-      <div class="side-nav">
-        <Button :class="{ active: store.panel === 'home' }" @click="go('home')"><Home :size="17" />知识库首页</Button>
-        <Button :class="{ active: store.panel === 'favorites' }" @click="go('favorites')"><Star :size="17" />我的收藏 <span class="nav-count">{{ store.favorites.length }}</span></Button>
-        <Button :class="{ active: store.panel === 'recent' }" @click="go('recent')"><Clock3 :size="17" />最近访问</Button>
-      </div>
       <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><Button title="上传文件" @click="openUpload()"><Upload :size="16" /></Button><Button title="创建内容" @click.stop="addMenuRef?.toggle($event)"><Plus :size="17" /></Button></div></div>
       <PrimeMenu ref="addMenuRef" :model="addItems" popup class="study-popup-menu" />
       <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">右键新建文档</div></div>
-      <div class="root-drop" @dragover.prevent @drop.prevent="dropRoot"><ArrowLeft :size="14" />拖到这里移至根目录</div>
-      <div class="sidebar-foot"><div class="sidebar-foot-icon"><Settings2 :size="16" /></div><div><strong>{{ account.user.username }}</strong><small>{{ account.user.role==='admin'?'管理员':'个人知识空间' }}</small></div><Button class="icon-btn" title="退出登录" @click="signOut"><LogOut :size="16" /></Button></div>
       </div>
     </aside>
 
@@ -274,7 +290,9 @@ watch(() => account.user?.id, (id, oldId) => {
       <div v-if="store.panel === 'search'" class="search-panel"><Search :size="21" /><InputText ref="searchInput" v-model="store.search" autofocus placeholder="搜索文档标题或正文内容..." /><Button v-if="store.search" class="icon-btn" @click="store.search = ''"><X :size="17" /></Button></div>
       <div class="main-scroll custom-scroll" :class="{ 'document-scroll': store.panel === 'document', 'has-search': store.panel === 'search' }">
         <SettingsView v-if="store.panel==='settings'" />
-        <DocumentView v-else-if="store.panel === 'document' && active" :key="active.id" ref="documentRef" :item="active" @outline="outline = $event" />
+        <TransferView v-else-if="store.panel === 'transfers'" />
+        <HomeView v-else-if="store.panel === 'home'" />
+        <DocumentView v-else-if="store.panel === 'document' && active" :key="active.id" ref="documentRef" :item="active" @outline="outline = $event" @download="downloadFile" />
         <CollectionView v-else @create="(kind) => openModal(kind)" @upload="openUpload()" />
       </div>
     </main>
@@ -326,6 +344,7 @@ watch(() => account.user?.id, (id, oldId) => {
       </form>
     </Dialog>
     <FileUpload ref="fileInput" class="visually-hidden" mode="basic" auto custom-upload multiple accept=".md,.markdown,.html,.htm,.pdf,.docx" @uploader="handleFiles" />
+    <TransferFloat @open="store.navigate('transfers'); transfers.floatingVisible = false" />
 
     <div v-if="mobileSidebar" class="mobile-shade" @click="mobileSidebar = false"></div>
   </div>

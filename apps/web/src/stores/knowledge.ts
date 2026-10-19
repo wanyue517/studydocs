@@ -2,8 +2,9 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type { KnowledgeItem, CreateItemInput, PatchItemInput } from '@studydocs/shared';
 import { api } from '../lib/api';
+import { useTransferStore } from './transfers';
 
-type Panel = 'home' | 'favorites' | 'recent' | 'trash' | 'search' | 'document' | 'settings';
+type Panel = 'home' | 'favorites' | 'recent' | 'trash' | 'search' | 'document' | 'settings' | 'transfers';
 export const useKnowledgeStore = defineStore('knowledge', () => {
   const items = ref<KnowledgeItem[]>([]);
   const deleted = ref<KnowledgeItem[]>([]);
@@ -86,7 +87,9 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   }
   async function upload(file: File, parentId: string | null) {
     try {
-      const doc = await api.upload(file, parentId); items.value.push(doc);
+      const doc = await useTransferStore().upload(file, parentId);
+      if (!doc) return null;
+      items.value.push(doc);
       if (parentId) revealFolder(parentId);
       open(doc.id); notify(`已上传：${file.name}`); return doc;
     } catch (e) { setError(e); return null; }

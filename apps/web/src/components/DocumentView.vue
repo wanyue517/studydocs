@@ -17,7 +17,7 @@ import Tag from 'primevue/tag';
 
 interface Heading { level: number; title: string; index: number }
 const props = defineProps<{ item: KnowledgeItem }>();
-const emit = defineEmits<{ outline: [items: Heading[]] }>();
+const emit = defineEmits<{ outline: [items: Heading[]]; download: [item: KnowledgeItem] }>();
 const store = useKnowledgeStore();
 const editing = ref(store.newItemId === props.item.id);
 const draft = ref(props.item.content);
@@ -93,7 +93,7 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); if (dirty.value) void pe
       <span class="toolbar-spacer"></span>
       <span v-if="editable" class="save-state"><LoaderCircle v-if="saving || dirty" :size="14" class="spin" /><Check v-else :size="14" />{{ saving || dirty ? '保存中...' : '已自动保存' }}</span>
       <Button v-if="editable" class="edit-toggle" @click="setEditing(!editing)"><Eye v-if="editing" :size="15" /><PencilLine v-else :size="15" />{{ editing ? '完成编辑' : '编辑文档' }}</Button>
-      <a v-if="item.kind === 'pdf' || item.kind === 'word'" class="secondary-btn" :href="api.fileUrl(item.id, true)" :download="item.fileName ?? item.name"><FileDown :size="15" />下载</a>
+      <button v-if="item.kind === 'pdf' || item.kind === 'word'" class="secondary-btn" @click="emit('download', item)"><FileDown :size="15" />下载</button>
       <a v-if="item.kind === 'web'" :href="item.url ?? undefined" rel="noopener noreferrer" target="_blank" class="secondary-btn"><ExternalLink :size="15" />新窗口打开</a>
     </div>
 
