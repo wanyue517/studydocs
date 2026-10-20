@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { openSync, readSync, closeSync, readFileSync } from 'node:fs';
 import sanitizeHtml from 'sanitize-html';
 import type { KnowledgeItem, ItemKind } from '@studydocs/shared';
 import { CreateItemDto, PatchItemDto } from './dto';
@@ -163,28 +164,71 @@ export class DocumentsService implements OnModuleInit {
 
   async upload(ownerId: string, file: Express.Multer.File, parentId: string | null, suppliedName?: string) {
     if (!file || !file.buffer) throw new BadRequestException('请选择文件');
+    return this.saveUpload(ownerId, file.originalname, file.size, file.buffer, parentId, suppliedName);
+  }
+
+  async uploadPath(ownerId: string, name: string, size: number, path: string, parentId: string | null, itemId?:string, storageId?:string) {
+    return this.saveUpload(ownerId, name, size, path, parentId, name, itemId, storageId);
+  }
+  async completeCloudUpload(ownerId:string,name:string,size:number,storageId:string,key:string,parentId:string|null,itemId:string) {
+    return this.saveUpload(ownerId,name,size,{storageId,key},parentId,name,itemId);
+  }
+
+  private async saveUpload(ownerId: string, originalName: string, size: number, source: Buffer | string | {storageId:string;key:string}, parentId: string | null, suppliedName?: string, itemId?:string, targetStorageId?:string) {
     this.assertParent(ownerId,parentId);
-    const raw = normalizeUploadFilename(file.originalname, suppliedName);
+    const raw = normalizeUploadFilename(originalName, suppliedName);
     if (!raw || raw.length > 255) throw new BadRequestException('文件名不能为空或超过 255 个字符');
     const ext = extname(raw).toLowerCase();
     const kind: Record<string, ItemKind> = { '.md':'markdown', '.markdown':'markdown', '.pdf':'pdf', '.docx':'word', '.html':'richtext', '.htm':'richtext' };
     if (!kind[ext]) throw new BadRequestException('仅支持 .md、.markdown、.html、.htm、.pdf、.docx（暂不支持旧版 .doc）');
-    if (ext === '.pdf' && file.buffer.subarray(0, 5).toString() !== '%PDF-') throw new BadRequestException('PDF 文件内容无效');
-    if (ext === '.docx' && file.buffer.subarray(0, 2).toString() !== 'PK') throw new BadRequestException('DOCX 文件内容无效');
-    const id = randomUUID(), now = iso();
+    let head: Buffer;
+    if (typeof source === 'string') {
+      const fd = openSync(source, 'r');
+      try { head = Buffer.alloc(5); readSync(fd, head, 0, 5, 0); } finally { closeSync(fd); }
+    } else if (Buffer.isBuffer(source)) head = source.subarray(0,5);
+    else head = await this.storage.readRange(source.storageId,source.key,0,Math.min(size-1,4));
+    if (ext === '.pdf' && head.subarray(0, 5).toString() !== '%PDF-') throw new BadRequestException('PDF 文件内容无效');
+    if (ext === '.docx' && head.subarray(0, 2).toString() !== 'PK') throw new BadRequestException('DOCX 文件内容无效');
+    const id = itemId ?? randomUUID(), now = iso();
     const isText = ['markdown','richtext'].includes(kind[ext]);
-    if (file.size > this.site.get().maxUploadMb * 1024 * 1024) throw new BadRequestException('超出管理员配置的上传大小限制');
-    let content = isText ? file.buffer.toString('utf8').replace(/^\uFEFF/, '') : '';
+    if (size > this.site.get().maxUploadMb * 1024 * 1024) throw new BadRequestException('超出管理员配置的上传大小限制');
+    if (isText && size > 2_000_000) throw new BadRequestException('可编辑文档内容不能超过 2 MB');
+    let content = isText ? (typeof source === 'string' ? readFileSync(source) : Buffer.isBuffer(source) ? source : await this.storage.read(source.storageId,source.key)).toString('utf8').replace(/^\uFEFF/, '') : '';
     if (kind[ext] === 'richtext') content = cleanHtml(content);
     if (content.length > 2_000_000) throw new BadRequestException('可编辑文档内容不能超过 2 MB');
     const mime = ext === '.pdf' ? 'application/pdf' : ext === '.docx'
       ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ext === '.html'||ext === '.htm' ? 'text/html' : 'text/markdown';
-    const stored = await this.storage.upload(file.buffer,ext,mime);
+    const stored = typeof source === 'string' ? await this.storage.uploadPath(source,ext,mime,targetStorageId) : Buffer.isBuffer(source) ? await this.storage.upload(source,ext,mime) : {storageId:source.storageId,objectKey:source.key};
     try {
       this.db.prepare(`INSERT INTO items(id,parent_id,name,kind,content,file_name,mime_type,created_at,updated_at,owner_id,storage_id,object_key)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,parentId,raw.replace(/\.(md|markdown|html|htm)$/i,''),kind[ext],content,raw,mime,now,now,ownerId,stored.storageId,stored.objectKey);
     } catch (error) { await this.storage.delete(stored.storageId,stored.objectKey).catch(() => {}); throw error; }
     return this.find(ownerId,id);
+  }
+
+  async fileInfo(ownerId: string, id: string) {
+    const row = this.row(ownerId,id);
+    const key = row.object_key ?? row.file_path;
+    if (!key) throw new NotFoundException('此文档没有上传的原始文件');
+    const editable = ['markdown','richtext'].includes(row.kind);
+    const size = editable ? Buffer.byteLength(row.content,'utf8') : await this.storage.size(row.storage_id,key);
+    return {name:row.file_name ?? 'document',mime:row.mime_type ?? 'application/octet-stream',size};
+  }
+  async downloadTicket(ownerId:string,id:string) {
+    const row = this.row(ownerId,id);
+    const key = row.object_key ?? row.file_path;
+    if (!key) throw new NotFoundException('此文档没有上传的原始文件');
+    const editable = ['markdown','richtext'].includes(row.kind);
+    const size = editable ? Buffer.byteLength(row.content,'utf8') : await this.storage.size(row.storage_id,key);
+    const url = !editable && this.storage.isCloud(row.storage_id) ? await this.storage.signedDownloadUrl(row.storage_id!,key) : null;
+    return {url,size};
+  }
+  async fileRange(ownerId: string, id: string, start: number, end: number) {
+    const row = this.row(ownerId,id);
+    const key = row.object_key ?? row.file_path;
+    if (!key) throw new NotFoundException('此文档没有上传的原始文件');
+    if (['markdown','richtext'].includes(row.kind)) return Buffer.from(row.content,'utf8').subarray(start,end+1);
+    return this.storage.readRange(row.storage_id,key,start,end);
   }
 
   async file(ownerId: string, id: string) {

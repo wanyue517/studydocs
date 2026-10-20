@@ -125,7 +125,7 @@ async function remove(id:string) {
           <div class="settings-divider"></div>
           <div class="settings-card-title"><h2>用户与安全</h2><p>注册开关即时生效；关闭后仅现有账号可登录。</p></div>
           <label class="settings-toggle"><span><strong>允许用户自行注册</strong><small>关闭后注册接口也将拒绝请求</small></span><ToggleSwitch v-model="site.allowRegistration" /></label>
-          <label>单文件上传大小上限 (MB)<InputNumber v-model="site.maxUploadMb" :min="1" :max="25" :use-grouping="false" class="settings-number" /></label>
+          <label>单文件上传大小上限 (MB)<InputNumber v-model="site.maxUploadMb" :min="1" :max="2048" :use-grouping="false" class="settings-number" /></label>
           <div class="settings-actions"><Button type="submit" label="保存网站设置" :loading="saving" :disabled="saving" /></div>
         </form>
       </template>

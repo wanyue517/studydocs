@@ -7,8 +7,9 @@ import { DocumentsController } from './documents.controller';
 import { SiteController, SiteService } from './site.service';
 import { StorageController } from './storage.controller';
 import { StorageService } from './storage.service';
+import { TransferService } from './transfer.service';
 @Module({
   controllers:[AuthController, DocumentsController, SiteController, StorageController],
-  providers:[DatabaseService, SiteService, StorageService, AuthService, DocumentsService, {provide:APP_GUARD,useClass:AuthGuard}],
+  providers:[DatabaseService, SiteService, StorageService, AuthService, DocumentsService, TransferService, {provide:APP_GUARD,useClass:AuthGuard}],
 })
 export class AppModule {}

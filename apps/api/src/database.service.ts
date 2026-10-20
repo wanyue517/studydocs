@@ -23,6 +23,13 @@ export class DatabaseService implements OnModuleDestroy {
       CREATE TABLE IF NOT EXISTS storage_gc_jobs (
         id TEXT PRIMARY KEY, storage_id TEXT, object_key TEXT NOT NULL, created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS upload_sessions (
+        id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, file_name TEXT NOT NULL,
+        parent_id TEXT, size INTEGER NOT NULL, chunk_size INTEGER NOT NULL,
+        received INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'uploading', item_id TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_upload_sessions_owner ON upload_sessions(owner_id);
       CREATE TABLE IF NOT EXISTS site_settings (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS storage_profiles (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL,
@@ -44,6 +51,10 @@ export class DatabaseService implements OnModuleDestroy {
     for (const column of ['owner_id', 'storage_id', 'object_key']) {
       if (!columns.includes(column)) this.db.exec(`ALTER TABLE items ADD COLUMN ${column} TEXT`);
     }
+    const uploadColumns = (this.db.prepare('PRAGMA table_info(upload_sessions)').all() as unknown as {name:string}[]).map((x)=>x.name);
+    for (const column of ['storage_id','object_key','upload_id']) {
+      if (!uploadColumns.includes(column)) this.db.exec(`ALTER TABLE upload_sessions ADD COLUMN ${column} TEXT`);
+    }
     if (!(this.db.prepare('SELECT 1 FROM storage_profiles LIMIT 1').get())) {
       this.db.prepare('INSERT INTO storage_profiles(id,name,provider,config_json,active,created_at) VALUES(?,?,?,?,?,?)')
         .run('local-default', '本地默认存储', 'local', '{}', 1, new Date().toISOString());
@@ -51,7 +62,7 @@ export class DatabaseService implements OnModuleDestroy {
     if (!(this.db.prepare('SELECT 1 FROM site_settings WHERE id=1').get())) {
       this.db.prepare('INSERT INTO site_settings(id,data) VALUES(1,?)').run(JSON.stringify({
         siteName:'拾页', siteSubtitle:'把知识整理成自己的体系', footerText:'拾页 StudyDocs · 记录与成长',
-        icpNumber:'', policeRecordNumber:'', loginNotice:'', allowRegistration:false, maxUploadMb:25,
+        icpNumber:'', policeRecordNumber:'', loginNotice:'', allowRegistration:false, maxUploadMb:1024,
         logoStorageId:null, logoObjectKey:null,
       }));
     }

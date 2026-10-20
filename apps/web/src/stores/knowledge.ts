@@ -24,6 +24,11 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     const query = search.value.trim().toLowerCase();
     return query ? items.value.filter((x) => x.kind !== 'folder' && `${x.name} ${x.content}`.toLowerCase().includes(query)) : [];
   });
+  useTransferStore().setUploadComplete((doc,parentId) => {
+    if (!items.value.some((item)=>item.id === doc.id)) items.value.push(doc);
+    if (parentId) revealFolder(parentId);
+    open(doc.id); notify(`已上传：${doc.fileName ?? doc.name}`);
+  });
 
   function readStorage<T>(key: string, fallback: T): T {
     try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; } catch { return fallback; }

@@ -25,7 +25,8 @@ const saving = ref(false);
 const dirty = ref(false);
 const fileError = ref('');
 const wordEl = ref<HTMLElement | null>(null);
-const fileUrl = computed(() => api.fileUrl(props.item.id));
+const fileUrl = ref('');
+const previewReady = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saveChain: Promise<unknown> = Promise.resolve();
 const editable = computed(() => props.item.kind === 'markdown' || props.item.kind === 'richtext');
@@ -82,7 +83,16 @@ async function renderWord() {
     }
   } catch (err) { fileError.value = err instanceof Error ? err.message : '无法预览此 Word 文件'; }
 }
-onMounted(() => { void nextTick(renderWord); });
+onMounted(async () => {
+  if (props.item.kind !== 'pdf' && props.item.kind !== 'word') return;
+  try {
+    const ticket = await api.downloadTicket(props.item.id);
+    fileUrl.value = ticket.url ?? api.fileUrl(props.item.id);
+    previewReady.value = true;
+    await nextTick();
+    await renderWord();
+  } catch (err) { fileError.value = err instanceof Error ? err.message : '无法获取预览地址'; }
+});
 onBeforeUnmount(() => { if (timer) clearTimeout(timer); if (dirty.value) void persist(); emit('outline', []); });
 </script>
 <template>
@@ -108,7 +118,8 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); if (dirty.value) void pe
 
     <div v-else-if="item.kind === 'pdf'" class="file-preview-area">
       <div class="file-preview-top">{{ item.fileName }}</div>
-      <div class="pdf-reader"><VuePdfEmbed :source="fileUrl" /></div>
+      <div v-if="fileError" class="file-error"><FileWarning :size="18" />{{ fileError }}</div>
+      <div v-else-if="previewReady" class="pdf-reader"><VuePdfEmbed :source="fileUrl" /></div>
     </div>
 
     <div v-else-if="item.kind === 'word'" class="file-preview-area">

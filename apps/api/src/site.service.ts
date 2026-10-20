@@ -20,7 +20,7 @@ export class SiteService {
       const val = input[field as keyof SiteSettings];
       if (val === undefined) continue;
       if (field === 'allowRegistration') { if (typeof val !== 'boolean') throw new BadRequestException('注册开关无效'); next.allowRegistration = val; }
-      else if (field === 'maxUploadMb') { if (typeof val !== 'number' || !Number.isInteger(val) || val < 1 || val > 25) throw new BadRequestException('上传限制必须为 1-25MB'); next.maxUploadMb = Number(val); }
+      else if (field === 'maxUploadMb') { if (typeof val !== 'number' || !Number.isInteger(val) || val < 1 || val > 2048) throw new BadRequestException('上传限制必须为 1-2048MB'); next.maxUploadMb = Number(val); }
       else {
         if (typeof val !== 'string' || val.length > (field === 'loginNotice' ? 500 : 140)) throw new BadRequestException('站点配置长度超限');
         (next as unknown as Record<string,unknown>)[field] = val.trim();
