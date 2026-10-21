@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { MdEditor, MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
-import VuePdfEmbed from 'vue-pdf-embed';
-import 'vue-pdf-embed/dist/styles/annotationLayer.css';
-import 'vue-pdf-embed/dist/styles/textLayer.css';
-import { renderAsync } from 'docx-preview';
+const PdfPreview = defineAsyncComponent({loader: () => import('./PdfPreview.vue'),delay:0,loadingComponent: {render: () => h('div',{class:'preview-loading',role:'status'},'正在准备 PDF 阅读器…')}});
 import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, LoaderCircle } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { api } from '../lib/api';
@@ -27,6 +24,10 @@ const fileError = ref('');
 const wordEl = ref<HTMLElement | null>(null);
 const fileUrl = ref('');
 const previewReady = ref(false);
+const previewLoading = ref(false);
+const webLoading = ref(true);
+let cancelled = false;
+let wordController: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saveChain: Promise<unknown> = Promise.resolve();
 const editable = computed(() => props.item.kind === 'markdown' || props.item.kind === 'richtext');
@@ -74,26 +75,36 @@ async function renderWord() {
   if (props.item.kind !== 'word' || !wordEl.value) return;
   try {
     fileError.value = '';
-    const response = await fetch(fileUrl.value);
+    wordController = new AbortController();
+    const response = await fetch(fileUrl.value,{signal:wordController.signal});
     if (!response.ok) throw new Error('文件读取失败');
     const blob = await response.blob();
-    if (wordEl.value) {
+    if (cancelled) return;
+    await new Promise<void>((resolve) => {
+      if ('requestIdleCallback' in window) window.requestIdleCallback(() => resolve(),{timeout:200});
+      else setTimeout(resolve,0);
+    });
+    if (wordEl.value && !cancelled) {
       wordEl.value.innerHTML = '';
-      await renderAsync(blob, wordEl.value, undefined, { breakPages: true, inWrapper: true });
+      const { renderAsync } = await import('docx-preview');
+      if (!cancelled) await renderAsync(blob, wordEl.value, undefined, { breakPages: true, inWrapper: true });
     }
-  } catch (err) { fileError.value = err instanceof Error ? err.message : '无法预览此 Word 文件'; }
+  } catch (err) { if (!cancelled) fileError.value = err instanceof Error ? err.message : '无法预览此 Word 文件'; }
+  finally { if (!cancelled) previewLoading.value = false; }
 }
 onMounted(async () => {
   if (props.item.kind !== 'pdf' && props.item.kind !== 'word') return;
+  previewLoading.value = true;
   try {
     const ticket = await api.downloadTicket(props.item.id);
+    if (cancelled) return;
     fileUrl.value = ticket.url ?? api.fileUrl(props.item.id);
     previewReady.value = true;
     await nextTick();
     await renderWord();
-  } catch (err) { fileError.value = err instanceof Error ? err.message : '无法获取预览地址'; }
+  } catch (err) { if (!cancelled) { fileError.value = err instanceof Error ? err.message : '无法获取预览地址'; previewLoading.value = false; } }
 });
-onBeforeUnmount(() => { if (timer) clearTimeout(timer); if (dirty.value) void persist(); emit('outline', []); });
+onBeforeUnmount(() => { cancelled = true; wordController?.abort(); if (timer) clearTimeout(timer); if (dirty.value) void persist(); emit('outline', []); });
 </script>
 <template>
   <div class="document-view">
@@ -117,20 +128,22 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); if (dirty.value) void pe
     </div>
 
     <div v-else-if="item.kind === 'pdf'" class="file-preview-area">
-      <div class="file-preview-top">{{ item.fileName }}</div>
       <div v-if="fileError" class="file-error"><FileWarning :size="18" />{{ fileError }}</div>
-      <div v-else-if="previewReady" class="pdf-reader"><VuePdfEmbed :source="fileUrl" /></div>
+      <div v-else-if="!previewReady" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在获取 PDF 预览地址…</div>
+      <PdfPreview v-else :source="fileUrl" :name="item.fileName ?? item.name" />
     </div>
 
     <div v-else-if="item.kind === 'word'" class="file-preview-area">
       <div class="file-preview-top">{{ item.fileName }}</div>
       <div v-if="fileError" class="file-error"><FileWarning :size="18" />{{ fileError }}</div>
+      <div v-if="previewLoading && !fileError" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在加载 Word 预览…</div>
       <div ref="wordEl" class="word-reader"></div>
     </div>
 
     <div v-else-if="item.kind === 'web'" class="web-preview-area">
       <div class="web-hint"><Globe2 :size="17" />网页预览：{{ item.url }} </div>
-      <iframe v-if="item.url" :src="item.url" :title="item.name" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe>
+      <div v-if="webLoading && item.url" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在加载网页…</div>
+      <iframe v-if="item.url" :src="item.url" :title="item.name" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer" loading="lazy" @load="webLoading = false"></iframe>
     </div>
   </div>
 </template>

@@ -194,3 +194,9 @@ body, .main-area, .document-view { color: var(--ink); }
   .study-dialog-actions { gap: 10px; }
   .study-dialog-actions .p-button { flex: 1 1 0; min-width: 0; }
 }
+.settings-card .field-error{color:#b43838;font-size:12px;font-weight:500;line-height:1.4;margin-top:-4px}
+.settings-card .p-invalid{border-color:#c94b4b}
+.file-preview-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.file-preview-controls nav{display:flex;align-items:center;gap:12px;white-space:nowrap;color:#425671}
+.preview-loading{display:flex;align-items:center;justify-content:center;gap:9px;min-height:100px;color:#536985;font-size:13px}
+.pdf-reader .preview-loading{min-height:110px}

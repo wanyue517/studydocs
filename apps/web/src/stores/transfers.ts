@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { api } from '../lib/api';
 import { cachedChunk, clearChunks, saveChunk } from '../lib/download-cache';
+import { joinChunks, yieldToBrowser } from '../lib/transfer-work';
 
 export interface TransferTask {
   id: string;
@@ -106,6 +107,7 @@ export const useTransferStore = defineStore('transfers', () => {
       persist();
       const chunks:Blob[] = [first.data];
       for (let i=1;i<count;i++) {
+        await yieldToBrowser();
         const start = i*chunkSize;
         let chunk = await cachedChunk(`${prefix}:${i}`);
         if (!chunk || chunk.size !== Math.min(chunkSize,total-start)) {
@@ -118,7 +120,8 @@ export const useTransferStore = defineStore('transfers', () => {
         progress(task,start+chunk.size,total);
         task.message = '';
       }
-      const blob = new Blob(chunks);
+      task.message = '下载完成，正在生成文件…';
+      const blob = await joinChunks(chunks);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url; link.download = name;

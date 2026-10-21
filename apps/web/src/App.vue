@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { AlignLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, ListChecks } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
@@ -8,9 +8,9 @@ import CollectionView from './components/CollectionView.vue';
 import HomeView from './components/HomeView.vue';
 import TransferView from './components/TransferView.vue';
 import TransferFloat from './components/TransferFloat.vue';
-import DocumentView from './components/DocumentView.vue';
+const DocumentView = defineAsyncComponent({loader: () => import('./components/DocumentView.vue'),delay:0,loadingComponent: {render: () => h('div',{class:'preview-loading',role:'status'},'正在打开文档…')}});
 import AuthView from './components/AuthView.vue';
-import SettingsView from './components/SettingsView.vue';
+const SettingsView = defineAsyncComponent({loader: () => import('./components/SettingsView.vue'),delay:0,loadingComponent: {render: () => h('div',{class:'preview-loading',role:'status'},'正在打开设置…')}});
 import { useAccountStore } from './stores/account';
 import { useTransferStore } from './stores/transfers';
 import roseImage from './assets/gold-rose.webp';
@@ -272,7 +272,7 @@ watch(() => account.user?.id, (id, oldId) => {
       <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><BookOpenText :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
       <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><Button title="上传文件" @click="openUpload()"><Upload :size="16" /></Button><Button title="创建内容" @click.stop="addMenuRef?.toggle($event)"><Plus :size="17" /></Button></div></div>
       <PrimeMenu ref="addMenuRef" :model="addItems" popup class="study-popup-menu" />
-      <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">右键新建文档</div></div>
+      <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">{{ store.loading ? '正在加载文档…' : '右键新建文档' }}</div></div>
       </div>
     </aside>
 

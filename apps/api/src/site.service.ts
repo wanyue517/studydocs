@@ -14,7 +14,9 @@ export class SiteService {
     return {siteName, siteSubtitle, footerText, icpNumber, policeRecordNumber, loginNotice, allowRegistration, logoUrl:logoObjectKey ? '/api/site/logo' : null}; }
   patch(input: Partial<SiteSettings>) {
     const permitted = ['siteName','siteSubtitle','footerText','icpNumber','policeRecordNumber','loginNotice','allowRegistration','maxUploadMb'];
-    if (!input || typeof input !== 'object' || Object.keys(input).some((k) => !permitted.includes(k))) throw new BadRequestException('包含不支持的配置');
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new BadRequestException('网站设置格式无效');
+    const unsupported = Object.keys(input).filter((key) => !permitted.includes(key));
+    if (unsupported.length) throw new BadRequestException(`以下配置不可通过此页面修改：${unsupported.join('、')}`);
     const next = {...this.get()};
     for (const field of permitted) {
       const val = input[field as keyof SiteSettings];
@@ -22,7 +24,7 @@ export class SiteService {
       if (field === 'allowRegistration') { if (typeof val !== 'boolean') throw new BadRequestException('注册开关无效'); next.allowRegistration = val; }
       else if (field === 'maxUploadMb') { if (typeof val !== 'number' || !Number.isInteger(val) || val < 1 || val > 2048) throw new BadRequestException('上传限制必须为 1-2048MB'); next.maxUploadMb = Number(val); }
       else {
-        if (typeof val !== 'string' || val.length > (field === 'loginNotice' ? 500 : 140)) throw new BadRequestException('站点配置长度超限');
+        if (typeof val !== 'string' || val.length > (field === 'loginNotice' ? 500 : 140)) throw new BadRequestException(`${({siteName:'站点名称',siteSubtitle:'站点副标题',footerText:'页脚文案',icpNumber:'ICP备案号',policeRecordNumber:'公安备案号',loginNotice:'登录页公告'} as Record<string,string>)[field]}必须是${field === 'loginNotice' ? '500' : '140'}字以内的文本`);
         (next as unknown as Record<string,unknown>)[field] = val.trim();
       }
     }

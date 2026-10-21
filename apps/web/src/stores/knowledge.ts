@@ -13,6 +13,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const panel = ref<Panel>('home');
   const search = ref('');
   const loading = ref(false);
+  const trashLoading = ref(false);
   const error = ref('');
   const toast = ref('');
   const expanded = ref<string[]>(readStorage('studydocs-expanded', []));
@@ -48,7 +49,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     catch (e) { setError(e); }
     finally { loading.value = false; }
   }
-  async function loadTrash() { try { deleted.value = await api.trash(); } catch (e) { setError(e); } }
+  async function loadTrash() { trashLoading.value = true; try { deleted.value = await api.trash(); } catch (e) { setError(e); } finally { trashLoading.value = false; } }
   function open(id: string, startEditing = false) {
     const item = items.value.find((x) => x.id === id);
     if (!item) return;
@@ -126,6 +127,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     if (result) { if (folderId) revealFolder(folderId); notify('已移动'); }
     return !!result;
   }
-  return { items, deleted, activeId, newItemId, panel, search, loading, error, toast, expanded, viewed, active,
+  return { items, deleted, activeId, newItemId, panel, search, loading, trashLoading, error, toast, expanded, viewed, active,
     recent, favorites, results, reset, load, loadTrash, open, navigate, toggleFolder, revealFolder, notify, create, update, upload, remove, restore, forever, move };
 });

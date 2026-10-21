@@ -1,4 +1,5 @@
 import type { KnowledgeItem, CreateItemInput, PatchItemInput } from '@studydocs/shared';
+import { hashChunk, yieldToBrowser } from './transfer-work';
 
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 
@@ -18,6 +19,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export interface Account { id:string; username:string; role:'admin'|'user' }
 export interface PublicSite {siteName:string;siteSubtitle:string;footerText:string;icpNumber:string;policeRecordNumber:string;loginNotice:string;allowRegistration:boolean;logoUrl:string|null}
 export interface SiteSettings extends Omit<PublicSite,'logoUrl'> {maxUploadMb:number;logoStorageId:string|null;logoObjectKey:string|null}
+export type EditableSiteSettings = Pick<SiteSettings,'siteName'|'siteSubtitle'|'footerText'|'icpNumber'|'policeRecordNumber'|'loginNotice'|'allowRegistration'|'maxUploadMb'>;
 export type Provider = 'local'|'r2'|'minio'|'qiniu'|'aliyun';
 export interface StorageProfile {id:string;name:string;provider:Provider;active:boolean;endpoint?:string;region?:string;bucket?:string;prefix?:string;accessKeyId?:string;forcePathStyle?:boolean;hasSecret:boolean;createdAt:string}
 export interface StorageInput {name:string;provider:Provider;endpoint:string;region:string;bucket:string;prefix:string;accessKeyId:string;secretAccessKey:string;forcePathStyle:boolean}
@@ -29,7 +31,7 @@ export const api = {
   logout: () => request<{success:boolean}>('/auth/logout',{method:'POST'}),
   changePassword: (oldPassword:string,newPassword:string) => request<{success:boolean}>('/auth/change-password',{method:'POST',body:JSON.stringify({oldPassword,newPassword})}),
   siteSettings: () => request<SiteSettings>('/site/settings'),
-  saveSite: (data:Partial<SiteSettings>) => request<SiteSettings>('/site/settings',{method:'PATCH',body:JSON.stringify(data)}),
+  saveSite: (data:EditableSiteSettings) => request<SiteSettings>('/site/settings',{method:'PATCH',body:JSON.stringify(data)}),
   storageList: () => request<StorageProfile[]>('/storage'),
   saveStorage: (data:StorageInput,id?:string) => request<StorageProfile>(id?`/storage/${id}`:'/storage',{method:id?'PATCH':'POST',body:JSON.stringify(data)}),
   activateStorage: (id:string) => request<StorageProfile[]>(`/storage/${id}/activate`,{method:'POST'}),
@@ -89,6 +91,7 @@ export const api = {
     if (current.mode !== 'cloud' && current.mode !== 'local') throw new Error('上传客户端版本已过期，请刷新页面后重试');
     onProgress?.(current.received,file.size);
     while (current.received < file.size) {
+      await yieldToBrowser();
       const offset:number = current.received;
       const chunk = file.slice(offset,offset+current.chunkSize);
       if (current.mode === 'cloud') {
@@ -102,7 +105,7 @@ export const api = {
           return verified;
         },'云端分片上传');
       } else {
-        const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await chunk.arrayBuffer()))).map((byte)=>byte.toString(16).padStart(2,'0')).join('');
+        const hash = await hashChunk(chunk);
         current = await retry(()=>send<Session>(`/items/upload/sessions/${current.id}/chunk?offset=${offset}`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Chunk-SHA256':hash},body:chunk}),'分片上传');
       }
       onProgress?.(current.received,file.size);

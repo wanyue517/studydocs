@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import Button from 'primevue/button';
 import { useConfirm } from 'primevue/useconfirm';
-import { ArrowRight, Clock3, Heart, Plus, RotateCcw, SearchX, Trash2 } from 'lucide-vue-next';
+import { ArrowRight, Clock3, Heart, LoaderCircle, Plus, RotateCcw, SearchX, Trash2 } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from '../stores/knowledge';
 import { useAccountStore } from '../stores/account';
@@ -28,7 +28,8 @@ function permanentlyDelete(item: KnowledgeItem) {
 <template>
   <div class="collection-view">
     <div class="collection-heading"><h1>{{ title }}</h1><p v-if="subtitle">{{ subtitle }}</p></div>
-    <div v-if="listing.length" class="doc-list page-list">
+    <div v-if="store.loading || store.panel === 'trash' && store.trashLoading" class="preview-loading" role="status"><LoaderCircle :size="20" class="spin" />正在加载文档…</div>
+    <div v-else-if="listing.length" class="doc-list page-list">
       <div v-for="item in listing" :key="item.id" class="doc-list-item" role="button" tabindex="0" @click="store.panel !== 'trash' && store.open(item.id)" @keydown.enter="store.panel !== 'trash' && store.open(item.id)">
         <span class="list-kind"><component :is="kindIcon[item.kind]" :size="19" /></span>
         <span class="list-main"><strong>{{ item.name }}</strong><small>{{ store.panel === 'trash' ? kindLabel[item.kind] : describe(item) }}</small></span>
