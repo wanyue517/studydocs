@@ -57,12 +57,20 @@ export class DocumentsController {
     res.setHeader('Cache-Control','private,no-store');
     res.setHeader('Accept-Ranges','bytes');
     if (range) {
-      const match = /^bytes=(\d+)-(\d*)$/.exec(range);
-      if (!match) return res.status(416).end();
-      const start = Number(match[1]), requestedEnd = match[2] ? Number(match[2]) : start+4*1024*1024-1;
-      const end = Math.min(requestedEnd,file.size-1);
-      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start >= file.size || end < start || requestedEnd-start+1 > 4*1024*1024)
+      // 原生 PDF 阅读器可能请求开放区间或尾部区间（用于读取交叉引用表）。
+      // 支持标准单区间请求，避免固定 4 MB 上限导致浏览器预览失败。
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+      if (!match || (!match[1] && !match[2]) || file.size === 0) {
+        res.setHeader('Content-Range',`bytes */${file.size}`);
         return res.status(416).end();
+      }
+      const start = match[1] ? Number(match[1]) : Math.max(0, file.size - Number(match[2]));
+      const end = match[1] && match[2] ? Math.min(Number(match[2]), file.size - 1) : file.size - 1;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+          start < 0 || start >= file.size || end < start) {
+        res.setHeader('Content-Range',`bytes */${file.size}`);
+        return res.status(416).end();
+      }
       const data = await this.service.fileRange(user.id,id,start,end);
       res.status(206).setHeader('Content-Range',`bytes ${start}-${end}/${file.size}`);
       res.setHeader('Content-Length',data.length);
