@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { MdEditor, MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
-const PdfPreview = defineAsyncComponent({loader: () => import('./PdfPreview.vue'),delay:0,loadingComponent: {render: () => h('div',{class:'preview-loading',role:'status'},'正在准备 PDF 阅读器…')}});
 import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, LoaderCircle } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { api } from '../lib/api';
@@ -25,6 +24,7 @@ const wordEl = ref<HTMLElement | null>(null);
 const fileUrl = ref('');
 const previewReady = ref(false);
 const previewLoading = ref(false);
+const pdfLoading = ref(true);
 const webLoading = ref(true);
 let cancelled = false;
 let wordController: AbortController | null = null;
@@ -100,8 +100,7 @@ onMounted(async () => {
     if (cancelled) return;
     fileUrl.value = ticket.url ?? api.fileUrl(props.item.id);
     previewReady.value = true;
-    await nextTick();
-    await renderWord();
+    if (props.item.kind === 'word') { await nextTick(); await renderWord(); }
   } catch (err) { if (!cancelled) { fileError.value = err instanceof Error ? err.message : '无法获取预览地址'; previewLoading.value = false; } }
 });
 onBeforeUnmount(() => { cancelled = true; wordController?.abort(); if (timer) clearTimeout(timer); if (dirty.value) void persist(); emit('outline', []); });
@@ -128,9 +127,13 @@ onBeforeUnmount(() => { cancelled = true; wordController?.abort(); if (timer) cl
     </div>
 
     <div v-else-if="item.kind === 'pdf'" class="file-preview-area">
+      <div class="file-preview-top">{{ item.fileName ?? item.name }}</div>
       <div v-if="fileError" class="file-error"><FileWarning :size="18" />{{ fileError }}</div>
       <div v-else-if="!previewReady" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在获取 PDF 预览地址…</div>
-      <PdfPreview v-else :source="fileUrl" :name="item.fileName ?? item.name" />
+      <div v-else class="pdf-native-reader">
+        <div v-if="pdfLoading" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在打开 PDF…</div>
+        <iframe :src="fileUrl" :title="`${item.name} PDF 预览`" @load="pdfLoading = false" @error="fileError = 'PDF 预览加载失败，请下载文件查看'" />
+      </div>
     </div>
 
     <div v-else-if="item.kind === 'word'" class="file-preview-area">

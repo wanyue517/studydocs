@@ -105,7 +105,7 @@ body, .main-area, .document-view { color: var(--ink); }
 
 /* 扩展文件预览工作区：页面本身保持正常纵横比例。 */
 .file-preview-area { padding: 22px clamp(18px, 3.8vw, 76px); }
-.file-preview-top, .pdf-reader, .word-reader { max-width: 1350px; }
+.file-preview-top, .pdf-native-reader, .word-reader { max-width: 1350px; }
 .file-preview-top { color: #455873; }
 .outline-sidebar { border-left-color: var(--line); }
 .outline-header, .outline-list .outline-h1, .outline-list button { color: #465b74; }
@@ -196,7 +196,7 @@ body, .main-area, .document-view { color: var(--ink); }
 }
 .settings-card .field-error{color:#b43838;font-size:12px;font-weight:500;line-height:1.4;margin-top:-4px}
 .settings-card .p-invalid{border-color:#c94b4b}
-.file-preview-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.file-preview-controls nav{display:flex;align-items:center;gap:12px;white-space:nowrap;color:#425671}
 .preview-loading{display:flex;align-items:center;justify-content:center;gap:9px;min-height:100px;color:#536985;font-size:13px}
-.pdf-reader .preview-loading{min-height:110px}
+.pdf-native-reader{position:relative;margin:auto;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 8px 27px #26374712}
+.pdf-native-reader iframe{display:block;width:100%;height:calc(100vh - 225px);min-height:520px;border:0}
+.pdf-native-reader .preview-loading{position:absolute;inset:0;z-index:1;background:#f7f9fc}

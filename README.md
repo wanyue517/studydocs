@@ -179,7 +179,7 @@ pnpm test:filename
 
 - [md-editor-v3](https://github.com/imzbf/md-editor-v3) — Markdown
 - [Tiptap](https://tiptap.dev/) — 富文本
-- [vue-pdf-embed](https://github.com/hrynko/vue-pdf-embed) — PDF
+- 浏览器内置 PDF 阅读器（iframe）— PDF 分页与缩放
 - [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) — DOCX
 - [Lucide](https://lucide.dev/) — 图标
 - [AWS SDK JS v3](https://github.com/aws/aws-sdk-js-v3) — R2、MinIO、七牛云
