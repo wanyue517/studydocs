@@ -6,7 +6,6 @@ import 'md-editor-v3/lib/style.css';
 import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, LoaderCircle } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { api } from '../lib/api';
-import { fmtDate, kindLabel } from '../lib/utils';
 import { useKnowledgeStore } from '../stores/knowledge';
 import RichTextEditor from './RichTextEditor.vue';
 const PdfReader = defineAsyncComponent({
@@ -17,7 +16,6 @@ const PdfReader = defineAsyncComponent({
 import { useAccountStore } from '../stores/account';
 import { previewKey, readPreview, savePreview } from '../lib/preview-cache';
 import Button from 'primevue/button';
-import Tag from 'primevue/tag';
 
 const props = defineProps<{ item: KnowledgeItem }>();
 const emit = defineEmits<{ outline: [items: Heading[]]; editing: [value: boolean]; download: [item: KnowledgeItem] }>();
@@ -36,7 +34,7 @@ const cacheKey = previewKey(useAccountStore().user!.id, props.item);
 const fromCache = ref(false);
 const fileSize = ref(0);
 let objectUrl = '';
-let active = true;
+const active = ref(true);
 const webLoading = ref(true);
 let cancelled = false;
 let wordController: AbortController | null = null;
@@ -58,8 +56,8 @@ const headings = computed<Heading[]>(() => {
   }
   return [];
 });
-watch(editing, (value) => { if (active) emit('editing', props.item.kind === 'markdown' && value); }, { immediate: true });
-watch(headings, (newItems) => { if (active) emit('outline', newItems); }, { immediate: true });
+watch(editing, (value) => { if (active.value) emit('editing', props.item.kind === 'markdown' && value); }, { immediate: true });
+watch(headings, (newItems) => { if (active.value) emit('outline', newItems); }, { immediate: true });
 watch(draft, () => {
   if (!editable.value || draft.value === props.item.content) return;
   dirty.value = true;
@@ -143,21 +141,20 @@ onMounted(async () => {
     if (props.item.kind === 'word') { await nextTick(); await renderWord(); }
   } catch (err) { if (!cancelled) { fileError.value = err instanceof Error ? err.message : '无法获取预览地址'; previewLoading.value = false; } }
 });
-onActivated(() => { active = true; emit('outline', headings.value); emit('editing', props.item.kind === 'markdown' && editing.value); });
-onDeactivated(() => { active = false; if (timer) clearTimeout(timer); if (dirty.value) void persist(); });
+onActivated(() => { active.value = true; emit('outline', headings.value); emit('editing', props.item.kind === 'markdown' && editing.value); });
+onDeactivated(() => { active.value = false; if (timer) clearTimeout(timer); if (dirty.value) void persist(); });
 onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); wordController?.abort(); if (timer) clearTimeout(timer); if (dirty.value) void persist(); });
 </script>
 <template>
   <div ref="documentEl" class="document-view" :class="{ 'file-document': item.kind === 'pdf' || item.kind === 'word', 'markdown-editing': item.kind === 'markdown' && editing }">
-    <div class="document-toolbar">
-      <Tag class="document-tag" :value="kindLabel[item.kind]" severity="secondary" />
-      <span class="document-date">更新于 {{ fmtDate(item.updatedAt) }}</span>
-      <span class="toolbar-spacer"></span>
-      <span v-if="editable" class="save-state"><LoaderCircle v-if="saving || dirty" :size="14" class="spin" /><Check v-else :size="14" />{{ saving || dirty ? '保存中...' : '已自动保存' }}</span>
-      <Button v-if="editable" class="edit-toggle" @click="setEditing(!editing)"><Eye v-if="editing" :size="15" /><PencilLine v-else :size="15" />{{ editing ? '完成编辑' : '编辑文档' }}</Button>
-      <button v-if="item.kind === 'pdf' || item.kind === 'word'" class="secondary-btn" @click="emit('download', item)"><FileDown :size="15" />下载</button>
-      <a v-if="item.kind === 'web'" :href="item.url ?? undefined" rel="noopener noreferrer" target="_blank" class="secondary-btn"><ExternalLink :size="15" />新窗口打开</a>
-    </div>
+    <Teleport to="#document-actions" defer>
+      <div v-if="active" class="document-actions-content">
+        <span v-if="editable" class="save-state"><LoaderCircle v-if="saving || dirty" :size="14" class="spin" /><Check v-else :size="14" />{{ saving || dirty ? '保存中...' : '已自动保存' }}</span>
+        <Button v-if="editable" text class="edit-toggle" :title="editing ? '完成编辑' : '编辑文档'" :aria-label="editing ? '完成编辑' : '编辑文档'" @click="setEditing(!editing)"><Eye v-if="editing" :size="17" /><PencilLine v-else :size="17" /><span class="document-action-label">{{ editing ? '完成编辑' : '编辑文档' }}</span></Button>
+        <Button v-if="item.kind === 'pdf' || item.kind === 'word'" text title="下载文档" aria-label="下载文档" @click="emit('download', item)"><FileDown :size="18" /></Button>
+        <a v-if="item.kind === 'web'" :href="item.url ?? undefined" rel="noopener noreferrer" target="_blank" class="document-open-link" title="新窗口打开" aria-label="新窗口打开"><ExternalLink :size="18" /></a>
+      </div>
+    </Teleport>
 
     <div v-if="item.kind === 'markdown' || item.kind === 'richtext'" class="article-inner">
       <div v-if="item.kind !== 'markdown' || !editing" class="article-intro"><h1>{{ item.name }}</h1></div>

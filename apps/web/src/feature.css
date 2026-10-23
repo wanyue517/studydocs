@@ -1,7 +1,7 @@
 :root { --ink: #172231; --muted: #435166; }
 body, .main-area, .document-view, .collection-view, .settings-page { color: var(--ink); }
-.tree-line { font-size:1rem; color: #283548; }
-.sidebar-section-title { margin-top: 22px; color: #3d5067; }
+.tree-line { font-size:14px; color: #283548; }
+.sidebar-section-title { margin: 0; min-height: 69px; flex-shrink: 0; padding: 16px 17px 16px 24px; color: #3d5067; }
 .sidebar-tree { position: relative; }
 .folder-sidebar.sidebar-drag-over .sidebar-tree { outline: 2px dashed #7b9fb7; outline-offset: -4px; border-radius: 10px; background: #f1f7fb; }
 .folder-sidebar.sidebar-drag-over .tree-line.drag-over { outline: 2px dashed #326889; outline-offset: -2px; background: #e5f0f7; }
@@ -71,7 +71,7 @@ body, .main-area, .document-view, .collection-view, .settings-page { color: var(
 @media (prefers-reduced-motion: reduce) { .rose-figure, .rose-reveal, .rose-shimmer, .rose-particles i, .rose-home-copy, .transfer-track.indeterminate i { animation: none; clip-path: none; } }
 
 /* Reading and browsing surfaces use a 16px base, 14px secondary text. */
-.tree-line { font-size: 1rem; min-height: 40px; height: auto; padding-block: 7px; }
+.tree-line { font-size: 14px; min-height: 40px; height: auto; padding-block: 7px; }
 .breadcrumbs { min-width: 0; }
 .document-toolbar { flex-wrap: wrap; padding-block: 10px; }
 .outline-sidebar { width: 250px; min-height: 0; }
@@ -175,4 +175,15 @@ body.resizing-panels iframe { pointer-events: none; }
 @media (max-width: 770px) {
   /* The themed shell must not place the mobile drawer beneath its backdrop. */
   .app-shell.has-global-rose > .folder-sidebar { z-index: 32; }
+}
+
+/* Document actions share the main header; previews have no metadata row. */
+.document-actions:empty { display: none; }
+.document-actions-content { display: flex; align-items: center; gap: 8px; }
+.document-actions-content .p-button { padding: 7px; font-size: 14px; flex-shrink: 0; }
+.document-open-link { display: inline-flex; padding: 7px; color: var(--accent); }
+.document-open-link:hover { color: var(--hover-ink); }
+@media (max-width: 770px) {
+  .document-actions-content { gap: 2px; }
+  .document-actions-content .save-state, .document-action-label { display: none; }
 }

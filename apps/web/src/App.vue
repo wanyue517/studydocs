@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { AlignLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, ListChecks } from 'lucide-vue-next';
+import { AlignLeft, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, ListChecks } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
 import TreeNode from './components/TreeNode.vue';
@@ -292,8 +292,7 @@ watch(() => account.user?.id, (id, oldId) => {
 
     <aside id="folder-panel" class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar, 'sidebar-drag-over': sidebarDragOver }" @click.stop @dragenter="enterSidebar" @dragleave="leaveSidebar" @dragover.prevent @drop.prevent="dropRoot">
       <div class="sidebar-inner">
-      <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="" /><BookOpenText v-else :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
-      <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><Button title="上传文件" @click="openUpload()"><Upload :size="16" /></Button><Button title="创建内容" @click.stop="addMenuRef?.toggle($event)"><Plus :size="17" /></Button></div></div>
+      <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><Button title="上传文件" @click="openUpload()"><Upload :size="16" /></Button><Button title="创建内容" @click.stop="addMenuRef?.toggle($event)"><Plus :size="17" /></Button><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div></div>
       <PrimeMenu ref="addMenuRef" :model="addItems" popup class="study-popup-menu" />
       <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">{{ store.loading ? '正在加载文档…' : '右键新建文档' }}</div></div>
       </div>
@@ -304,8 +303,9 @@ watch(() => account.user?.id, (id, oldId) => {
       <header class="topbar">
         <Button v-if="!sidebarVisible" class="icon-btn reopen" title="打开侧边栏" @click.stop="sidebarVisible = true"><PanelLeftOpen :size="19" /></Button>
         <Button class="icon-btn mobile-menu-btn" title="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><Menu :size="20" /></Button>
-        <div class="breadcrumbs"><Button @click="go('home')">知识库</Button><template v-if="(store.panel === 'document' || store.panel === 'folder') && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><Button v-if="crumb.kind === 'folder'" @click="store.open(crumb.id)">{{ crumb.name }}</Button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
+        <div class="breadcrumbs"><button type="button" @click="go('home')">知识库</button><template v-if="(store.panel === 'document' || store.panel === 'folder') && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><button v-if="crumb.kind === 'folder'" type="button" @click="store.open(crumb.id)">{{ crumb.name }}</button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
         <div class="topbar-right">
+          <div id="document-actions" class="document-actions"></div>
           <Button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); focusSearch()"><Search :size="19" /></Button>
           <template v-if="(store.panel === 'document' || store.panel === 'folder') && active"><div class="topbar-split"></div><Button class="icon-btn star-toggle" :class="{ 'is-starred': active.starred }" :title="active.starred ? '取消收藏' : '收藏文档'" @click.stop="toggleStar()"><Star :size="19" :fill="active.starred ? 'currentColor' : 'none'" /></Button><div class="more-anchor"><Button class="icon-btn" text title="更多操作" @click.stop="moreMenuRef?.toggle($event)"><MoreHorizontal :size="21" /></Button><PrimeMenu ref="moreMenuRef" :model="moreItems" popup class="study-popup-menu" /></div></template>
           

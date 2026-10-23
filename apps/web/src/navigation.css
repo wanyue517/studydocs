@@ -1,9 +1,16 @@
 /* Navigation uses text/icon contrast; filled actions and selected states retain
    their own surfaces. Keyboard focus rings remain visible throughout the UI. */
 :root { --hover-ink: #22445a; --hierarchy-line: #aebfcd; }
-.breadcrumbs .p-button.p-component:not(:disabled):is(:hover, :active, :focus-visible) {
-  color: var(--hover-ink); background: transparent; border-color: transparent; box-shadow: none;
+/* Native breadcrumb buttons avoid themed button borders changing on hover. */
+.breadcrumbs, .breadcrumbs button, .breadcrumbs strong { font-size: 14px; }
+.breadcrumbs button,
+.breadcrumbs button:is(:hover, :active, :focus, :focus-visible) {
+  border: 0; border-radius: 0; box-shadow: none; background: transparent;
+  transform: none; padding: 3px 0; font-weight: 500; line-height: 1.5;
+  transition: color .15s ease;
 }
+.breadcrumbs button:is(:hover, :active, :focus-visible) { color: var(--hover-ink); }
+.breadcrumbs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.p-button.p-component:not(:disabled):is(:hover, :active),
 .sidebar-title-actions .p-button.p-component:not(:disabled):is(:hover, :active) {
   color: var(--hover-ink); background: transparent; box-shadow: none;
