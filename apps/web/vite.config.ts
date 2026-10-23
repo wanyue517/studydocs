@@ -34,5 +34,18 @@ function pdfAssets(): Plugin {
 
 export default defineConfig({
   plugins: [vue(), pdfAssets()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Many deployed MIME tables treat .mjs as application/octet-stream.
+        // Keep the module contents intact, but serve the Worker with a .js URL.
+        assetFileNames(asset) {
+          return asset.names.some((name) => name.endsWith('pdf.worker.min.mjs'))
+            ? 'assets/[name]-[hash].js'
+            : 'assets/[name]-[hash][extname]';
+        },
+      },
+    },
+  },
   server: { port: 5173, strictPort: true, proxy: { '/api': 'http://localhost:3200' } },
 });

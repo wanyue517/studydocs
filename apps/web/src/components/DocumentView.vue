@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, h, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { MdEditor, MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
 import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, LoaderCircle } from 'lucide-vue-next';
@@ -8,7 +8,11 @@ import { api } from '../lib/api';
 import { fmtDate, kindLabel } from '../lib/utils';
 import { useKnowledgeStore } from '../stores/knowledge';
 import RichTextEditor from './RichTextEditor.vue';
-const PdfReader = defineAsyncComponent(() => import('./PdfReader.vue'));
+const PdfReader = defineAsyncComponent({
+  loader: () => import('./PdfReader.vue'),
+  delay: 0,
+  loadingComponent: { render: () => h('div', { class: 'preview-loading pdf-module-loading', role: 'status' }, [h(LoaderCircle, { size: 22, class: 'spin' }), '正在初始化 PDF 阅读器…']) },
+});
 import { useAccountStore } from '../stores/account';
 import { previewKey, readPreview, savePreview } from '../lib/preview-cache';
 import Button from 'primevue/button';

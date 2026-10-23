@@ -44,6 +44,7 @@ const source = computed(() => ({
   wasmUrl: `${import.meta.env.BASE_URL}pdf-assets/wasm/`,
 }));
 const pageWidth = computed(() => Math.max(100, (width.value - 32) * zoom.value));
+watch(pageWidth, () => { if (!error.value) loading.value = true; });
 // Only the selected page is rendered, keeping canvas memory bounded for large PDFs.
 function selectPage(value: number) {
   const next = Math.max(1, Math.min(pages.value || 1, Math.trunc(value) || 1));
@@ -94,10 +95,12 @@ onBeforeUnmount(() => { stopped = true; savePosition(); observer?.disconnect(); 
       <Button severity="secondary" text aria-label="放大" :disabled="zoom >= 2" @click="setZoom(zoom + 0.1)"><Plus :size="18" /></Button>
       <a :href="props.source" target="_blank" rel="noopener noreferrer" class="pdf-native-link" title="使用浏览器打开"><ExternalLink :size="18" /><span>浏览器打开</span></a>
     </div>
-    <div ref="viewport" class="pdf-viewport custom-scroll" :aria-busy="loading" @scroll.passive="scrolled">
-      <div v-if="error" class="file-error" role="alert">{{ error }}，可点击“浏览器打开”或下载查看。</div>
-      <div v-else-if="loading" class="pdf-page-loading preview-loading" role="status"><LoaderCircle :size="22" class="spin" />{{ pages ? '正在渲染页面…' : `正在加载 PDF${progress ? `（${progress}%）` : ''}…` }}</div>
-      <VuePdfEmbed v-if="width && !error" :source="source" :page="page" :width="pageWidth" text-layer annotation-layer class="pdf-page" @loaded="loaded" @progress="progress = $event.total ? Math.min(100, Math.round($event.loaded / $event.total * 100)) : 0" @rendered="rendered" @loading-failed="failed" @rendering-failed="failed" @password-requested="error = '此文件需要密码，请使用浏览器打开'" @internal-link-clicked="selectPage" />
+    <div class="pdf-reader-body">
+      <div ref="viewport" class="pdf-viewport custom-scroll" :aria-busy="loading" @scroll.passive="scrolled">
+        <VuePdfEmbed v-if="width && !error" :source="source" :page="page" :width="pageWidth" text-layer annotation-layer class="pdf-page" @loaded="loaded" @progress="progress = $event.total ? Math.min(100, Math.round($event.loaded / $event.total * 100)) : 0" @rendered="rendered" @loading-failed="failed" @rendering-failed="failed" @password-requested="loading = false; error = '此文件需要密码，请使用浏览器打开'" @internal-link-clicked="selectPage" />
+      </div>
+      <div v-if="error" class="pdf-status-overlay file-error" role="alert"><span>{{ error }}，可点击“浏览器打开”或下载查看。</span></div>
+      <div v-else-if="loading" class="pdf-status-overlay pdf-page-loading preview-loading" role="status"><LoaderCircle :size="22" class="spin" /><span>{{ pages ? '正在渲染页面…' : `正在加载 PDF${progress ? `（${progress}%）` : ''}…` }}</span></div>
     </div>
   </section>
 </template>

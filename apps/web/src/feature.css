@@ -100,7 +100,11 @@ body, .main-area, .document-view, .collection-view, .settings-page { color: var(
 .pdf-viewport { position: relative; overflow: auto; flex: 1; min-height: 0; background: var(--study-soft); padding: 16px; overflow-anchor: none; }
 .pdf-page { width: max-content; min-width: 100%; }
 .pdf-page > div { margin-inline: auto; background: white; box-shadow: 0 2px 12px #2637471a; }
-.pdf-page-loading { position: sticky; top: 0; left: 0; z-index: 2; background: var(--study-soft); min-height: 60px; }
+.pdf-reader-body { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; }
+.pdf-status-overlay { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 24px; background: rgb(246 248 250 / 94%); }
+.pdf-status-overlay span { min-width: 0; overflow-wrap: anywhere; }
+.pdf-status-overlay svg { flex-shrink: 0; }
+.pdf-preview-area > .preview-loading, .pdf-preview-area > .file-error { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; padding: 24px; }
 @media (max-width: 770px) {
   .pdf-controls { padding-inline: 4px; }
   .pdf-native-link span { display: none; }
