@@ -4,7 +4,7 @@ import type { KnowledgeItem, CreateItemInput, PatchItemInput } from '@studydocs/
 import { api } from '../lib/api';
 import { useTransferStore } from './transfers';
 
-type Panel = 'home' | 'favorites' | 'recent' | 'trash' | 'search' | 'document' | 'settings' | 'transfers';
+type Panel = 'home' | 'favorites' | 'recent' | 'trash' | 'search' | 'document' | 'settings' | 'transfers' | 'folder';
 export const useKnowledgeStore = defineStore('knowledge', () => {
   const items = ref<KnowledgeItem[]>([]);
   const deleted = ref<KnowledgeItem[]>([]);
@@ -53,17 +53,22 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   function open(id: string, startEditing = false) {
     const item = items.value.find((x) => x.id === id);
     if (!item) return;
-    if (item.kind === 'folder') { toggleFolder(id); return; }
-    newItemId.value = startEditing ? id : null;
-    activeId.value = id; panel.value = 'document';
-    viewed.value = [id, ...viewed.value.filter((v) => v !== id)].slice(0, 20);
-    localStorage.setItem('studydocs-viewed', JSON.stringify(viewed.value));
+    if (item.kind === 'folder') {
+      activeId.value = id; panel.value = 'folder'; newItemId.value = null;
+      revealFolder(id);
+    } else {
+      newItemId.value = startEditing ? id : null;
+      activeId.value = id; panel.value = 'document';
+      viewed.value = [id, ...viewed.value.filter((v) => v !== id)].slice(0, 20);
+      localStorage.setItem('studydocs-viewed', JSON.stringify(viewed.value));
+    }
     let parent = item.parentId;
     while (parent) { if (!expanded.value.includes(parent)) expanded.value.push(parent); parent = items.value.find((x) => x.id === parent)?.parentId ?? null; }
     localStorage.setItem('studydocs-expanded', JSON.stringify(expanded.value));
   }
   function navigate(to: Panel) {
     panel.value = to;
+    if (to === 'folder') activeId.value = null;
     if (to === 'trash') void loadTrash();
   }
   function toggleFolder(id: string) {

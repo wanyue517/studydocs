@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { MdEditor, MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/style.css';
 import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, LoaderCircle } from 'lucide-vue-next';
@@ -8,12 +8,15 @@ import { api } from '../lib/api';
 import { fmtDate, kindLabel } from '../lib/utils';
 import { useKnowledgeStore } from '../stores/knowledge';
 import RichTextEditor from './RichTextEditor.vue';
+const PdfReader = defineAsyncComponent(() => import('./PdfReader.vue'));
+import { useAccountStore } from '../stores/account';
+import { previewKey, readPreview, savePreview } from '../lib/preview-cache';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 
 interface Heading { level: number; title: string; index: number }
 const props = defineProps<{ item: KnowledgeItem }>();
-const emit = defineEmits<{ outline: [items: Heading[]]; download: [item: KnowledgeItem] }>();
+const emit = defineEmits<{ outline: [items: Heading[]]; editing: [value: boolean]; download: [item: KnowledgeItem] }>();
 const store = useKnowledgeStore();
 const editing = ref(store.newItemId === props.item.id);
 const draft = ref(props.item.content);
@@ -24,7 +27,11 @@ const wordEl = ref<HTMLElement | null>(null);
 const fileUrl = ref('');
 const previewReady = ref(false);
 const previewLoading = ref(false);
-const pdfLoading = ref(true);
+const cacheKey = previewKey(useAccountStore().user!.id, props.item);
+const fromCache = ref(false);
+const fileSize = ref(0);
+let objectUrl = '';
+let active = true;
 const webLoading = ref(true);
 let cancelled = false;
 let wordController: AbortController | null = null;
@@ -41,7 +48,8 @@ const headings = computed<Heading[]>(() => {
   }
   return [];
 });
-watch(headings, (newItems) => emit('outline', newItems), { immediate: true });
+watch(editing, (value) => { if (active) emit('editing', props.item.kind === 'markdown' && value); }, { immediate: true });
+watch(headings, (newItems) => { if (active) emit('outline', newItems); }, { immediate: true });
 watch(draft, () => {
   if (!editable.value || draft.value === props.item.content) return;
   dirty.value = true;
@@ -79,6 +87,7 @@ async function renderWord() {
     const response = await fetch(fileUrl.value,{signal:wordController.signal});
     if (!response.ok) throw new Error('文件读取失败');
     const blob = await response.blob();
+    if (!fromCache.value) void savePreview(cacheKey, blob);
     if (cancelled) return;
     await new Promise<void>((resolve) => {
       if ('requestIdleCallback' in window) window.requestIdleCallback(() => resolve(),{timeout:200});
@@ -96,17 +105,27 @@ onMounted(async () => {
   if (props.item.kind !== 'pdf' && props.item.kind !== 'word') return;
   previewLoading.value = true;
   try {
-    const ticket = await api.downloadTicket(props.item.id);
+    const blob = await readPreview(cacheKey);
     if (cancelled) return;
-    fileUrl.value = ticket.url ?? api.fileUrl(props.item.id);
+    if (blob) {
+      objectUrl = URL.createObjectURL(blob);
+      fileUrl.value = objectUrl; fromCache.value = true; fileSize.value = blob.size;
+    } else {
+      const ticket = await api.downloadTicket(props.item.id);
+      if (cancelled) return;
+      fileUrl.value = ticket.url ?? api.fileUrl(props.item.id);
+      fileSize.value = ticket.size;
+    }
     previewReady.value = true;
     if (props.item.kind === 'word') { await nextTick(); await renderWord(); }
   } catch (err) { if (!cancelled) { fileError.value = err instanceof Error ? err.message : '无法获取预览地址'; previewLoading.value = false; } }
 });
-onBeforeUnmount(() => { cancelled = true; wordController?.abort(); if (timer) clearTimeout(timer); if (dirty.value) void persist(); emit('outline', []); });
+onActivated(() => { active = true; emit('outline', headings.value); emit('editing', props.item.kind === 'markdown' && editing.value); });
+onDeactivated(() => { active = false; if (timer) clearTimeout(timer); if (dirty.value) void persist(); });
+onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); wordController?.abort(); if (timer) clearTimeout(timer); if (dirty.value) void persist(); });
 </script>
 <template>
-  <div class="document-view">
+  <div class="document-view" :class="{ 'file-document': item.kind === 'pdf' || item.kind === 'word', 'markdown-editing': item.kind === 'markdown' && editing }">
     <div class="document-toolbar">
       <Tag class="document-tag" :value="kindLabel[item.kind]" severity="secondary" />
       <span class="document-date">更新于 {{ fmtDate(item.updatedAt) }}</span>
@@ -118,7 +137,7 @@ onBeforeUnmount(() => { cancelled = true; wordController?.abort(); if (timer) cl
     </div>
 
     <div v-if="item.kind === 'markdown' || item.kind === 'richtext'" class="article-inner">
-      <div class="article-intro"><h1>{{ item.name }}</h1></div>
+      <div v-if="item.kind !== 'markdown' || !editing" class="article-intro"><h1>{{ item.name }}</h1></div>
       <div v-if="item.kind === 'markdown'" class="markdown-wrapper" :class="{ editing }">
         <MdEditor v-if="editing" v-model="draft" language="zh-CN" theme="light" preview-theme="github" :toolbars-exclude="['github','save','htmlPreview','catalog']" class="md-edit-area" />
         <MdPreview v-else :id="`md-${item.id}`" :model-value="draft" theme="light" preview-theme="github" class="md-read-area" />
@@ -126,14 +145,10 @@ onBeforeUnmount(() => { cancelled = true; wordController?.abort(); if (timer) cl
       <RichTextEditor v-else v-model="draft" :editable="editing" />
     </div>
 
-    <div v-else-if="item.kind === 'pdf'" class="file-preview-area">
-      <div class="file-preview-top">{{ item.fileName ?? item.name }}</div>
-      <div v-if="fileError" class="file-error"><FileWarning :size="18" />{{ fileError }}</div>
-      <div v-else-if="!previewReady" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在获取 PDF 预览地址…</div>
-      <div v-else class="pdf-native-reader">
-        <div v-if="pdfLoading" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在打开 PDF…</div>
-        <iframe :src="fileUrl" :title="`${item.name} PDF 预览`" @load="pdfLoading = false" @error="fileError = 'PDF 预览加载失败，请下载文件查看'" />
-      </div>
+    <div v-else-if="item.kind === 'pdf'" class="file-preview-area pdf-preview-area">
+      <div v-if="fileError" class="file-error" role="alert"><FileWarning :size="18" />{{ fileError }}</div>
+      <div v-else-if="!previewReady" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在准备 PDF…</div>
+      <PdfReader v-else :source="fileUrl" :cache-key="cacheKey" :size="fileSize" :cached="fromCache" />
     </div>
 
     <div v-else-if="item.kind === 'word'" class="file-preview-area">

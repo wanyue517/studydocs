@@ -59,24 +59,24 @@ body, .main-area, .document-view, .collection-view { color: var(--ink); }
 .rich-toolbar .p-button { width: 31px; height: 31px; min-width: 31px; padding: 0; background: transparent; border: 0; color: #506479; box-shadow: none; }
 .rich-toolbar .p-button:hover, .rich-toolbar .p-button.active { background: var(--accent-light); color: var(--accent); }
 .rich-toolbar { background: #f6f9fb; border-color: #dce4eb; }
-.document-tag.p-tag { font-size: 12px; font-weight: 600; background: #eaf1f5; color: #355773; }
+.document-tag.p-tag { font-size:0.875rem; font-weight: 600; background: #eaf1f5; color: #355773; }
 .study-popup-menu.p-menu, .study-popup-menu.p-contextmenu {
   min-width: 202px; border: 1px solid #dce4ec; box-shadow: 0 15px 45px rgb(26 46 62 / 12%);
   border-radius: 10px; padding: 5px;
 }
 .study-popup-menu .p-menu-item-link, .study-popup-menu .p-contextmenu-item-link {
-  padding: 10px 12px; border-radius: 6px; color: #34485b; font-size: 13px;
+  padding: 10px 12px; border-radius: 6px; color: #34485b; font-size:1rem;
 }
 .study-popup-menu .p-menu-item-link:hover { background: var(--accent-light); }
 .study-confirm-dialog.p-dialog { width: min(430px, calc(100vw - 32px)); }
 .study-confirm-dialog .p-dialog-content { padding-top: 12px; }
 .study-confirm-dialog .p-dialog-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; }
 .study-dialog .p-dialog-header { color: var(--ink); }
-.study-dialog .p-button { font-size: 13px; }
+.study-dialog .p-button { font-size:1rem; }
 .settings-tabs.study-segmented { display: flex; gap: 0; width: max-content; max-width: 100%; flex-wrap: wrap; border: 0; margin: 22px 0 26px; }
 .settings-tabs.study-segmented .p-togglebutton {
   background: #fff; border: 1px solid #d7e1e9; color: #526579;
-  padding: 10px 17px; font-size: 13px;
+  padding: 10px 17px; font-size:1rem;
 }
 .settings-tabs.study-segmented .p-togglebutton.p-togglebutton-checked {
   background: var(--accent-light); color: var(--accent); border-color: #b9d1df;
@@ -87,7 +87,7 @@ body, .main-area, .document-view, .collection-view { color: var(--ink); }
 .settings-card .p-toggleswitch { flex-shrink: 0; }
 .settings-card .settings-number { width: 155px; }
 .settings-feedback.p-message { margin: 0 0 18px; }
-.storage-actions .p-button { padding: 6px 8px; font-size: 12px; color: var(--accent); }
+.storage-actions .p-button { padding: 6px 8px; font-size:0.875rem; color: var(--accent); }
 .storage-actions .p-button:hover { background: var(--accent-light); }
 .auth-card .p-password { display: flex; width: 100%; }
 .auth-card .p-password .p-inputtext { width: 100%; min-height: 43px; padding-right: 42px; }

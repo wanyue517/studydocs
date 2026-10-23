@@ -10,21 +10,23 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@primeuix/themes": "1.2.5",
     "@studydocs/shared": "workspace:*",
+    "@tiptap/extension-table": "^3.30.0",
     "@tiptap/starter-kit": "^3.30.0",
     "@tiptap/vue-3": "^3.30.0",
     "docx-preview": "^0.4.1",
     "lucide-vue-next": "^0.468.0",
     "md-editor-v3": "^7.1.0",
     "pinia": "^3.0.3",
-    "vue": "^3.5.24",
-    "@tiptap/extension-table": "^3.30.0",
     "primevue": "4.5.5",
-    "@primeuix/themes": "1.2.5"
+    "vue": "^3.5.24",
+    "vue-pdf-embed": "^2.1.7",
+    "pdfjs-dist": "^6.4.299"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.0",
     "@types/node": "^22.15.0",
+    "@vitejs/plugin-vue": "^6.0.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.0",
     "vue-tsc": "^2.2.12"

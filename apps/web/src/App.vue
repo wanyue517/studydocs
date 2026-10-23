@@ -4,6 +4,8 @@ import { AlignLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizont
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
 import TreeNode from './components/TreeNode.vue';
+import PanelResizeHandle from './components/PanelResizeHandle.vue';
+import { useSidebarWidths } from './composables/useSidebarWidths';
 import CollectionView from './components/CollectionView.vue';
 import HomeView from './components/HomeView.vue';
 import TransferView from './components/TransferView.vue';
@@ -48,6 +50,10 @@ const modalParent = ref<string | null>(null);
 const modalItem = ref<KnowledgeItem | null>(null);
 const creating = ref(false);
 const sidebarVisible = ref(true);
+const shellRef = ref<HTMLElement | null>(null);
+const markdownEditing = ref(false);
+const hasOutline = computed(() => store.panel === 'document' && (store.active?.kind === 'markdown' || store.active?.kind === 'richtext'));
+const panels = useSidebarWidths(shellRef, sidebarVisible, hasOutline);
 const mobileSidebar = ref(false);
 const menu = ref<{ item: KnowledgeItem | null } | null>(null);
 const moveDestination = ref('');
@@ -129,7 +135,8 @@ function openUpload(parent: string | null = null) {
 }
 async function handleFiles(event: { files: File[] | File }) {
   const files = Array.isArray(event.files) ? event.files : [event.files];
-  for (const file of files) await store.upload(file, modalParent.value);
+  const parentId = modalParent.value;
+  for (const file of files) await store.upload(file, parentId);
   (fileInput.value as unknown as { clear: () => void } | null)?.clear();
   mobileSidebar.value = false;
 }
@@ -165,7 +172,7 @@ const contextItems = computed(() => {
   if (!item) return add;
   return [
     ...add, ...(add.length ? [{separator:true}] : []),
-    { label: item.kind === 'folder' ? '展开或收起' : '打开文档', command: openMenuItem },
+    { label: item.kind === 'folder' ? '打开文件夹' : '打开文档', command: openMenuItem },
     { label: '重命名', command: () => openModal('rename', null, item) },
     { label: item.starred ? '取消收藏' : '加入收藏', command: () => toggleStar(item) },
     { label: '移动到文件夹', command: () => openModal('move', null, item) },
@@ -192,7 +199,6 @@ function openMenuItem() {
   const item = menu.value?.item;
   menu.value = null;
   if (!item) return;
-  if (item.kind === 'folder') { store.toggleFolder(item.id); return; }
   store.open(item.id);
   mobileSidebar.value = false;
 }
@@ -207,10 +213,11 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') { mobileSidebar.value = false; }
 }
 function go(panel: 'home' | 'recent' | 'favorites' | 'trash') { store.navigate(panel); mobileSidebar.value = false; outline.value = []; }
+function resetSidebarDrag() { sidebarDragDepth = 0; sidebarDragOver.value = false; }
 function enterSidebar(event: DragEvent) { if (!Array.from(event.dataTransfer?.types ?? []).some((type) => type === 'text/plain' || type === 'Files')) return; sidebarDragDepth++; sidebarDragOver.value = true; }
 function leaveSidebar() { sidebarDragDepth = Math.max(0, sidebarDragDepth - 1); if (!sidebarDragDepth) sidebarDragOver.value = false; }
 function dropRoot(event: DragEvent) {
-  sidebarDragDepth = 0; sidebarDragOver.value = false;
+  resetSidebarDrag();
   if (event.target instanceof Element && event.target.closest('.tree-line')) return;
   if (event.dataTransfer?.files.length) {
     for (const file of Array.from(event.dataTransfer.files)) void store.upload(file, null);
@@ -233,11 +240,18 @@ const accountItems = computed(() => [
 function unauthorized() { account.user = null;store.reset(); }
 onMounted(async () => {
   window.addEventListener('keydown',onKeydown);
+  // Capture drops even when a tree node stops event propagation.
+  window.addEventListener('drop',resetSidebarDrag,true);
+  window.addEventListener('dragend',resetSidebarDrag,true);
+  window.addEventListener('blur',resetSidebarDrag);
   window.addEventListener('studydocs:unauthorized',unauthorized);
   await account.bootstrap();
 });
 onUnmounted(() => {
   window.removeEventListener('keydown',onKeydown);
+  window.removeEventListener('drop',resetSidebarDrag,true);
+  window.removeEventListener('dragend',resetSidebarDrag,true);
+  window.removeEventListener('blur',resetSidebarDrag);
   window.removeEventListener('studydocs:unauthorized',unauthorized);
 });
 watch(() => store.toast, (value) => {
@@ -255,7 +269,7 @@ watch(() => account.user?.id, (id, oldId) => {
 <template>
   <div v-if="!account.ready" class="auth-loading">正在加载拾页...</div>
   <AuthView v-else-if="!account.user" />
-  <div v-else class="app-shell" :class="{ 'has-global-rose': store.panel !== 'home' }">
+  <div v-else ref="shellRef" class="app-shell" :style="panels.style.value" :class="{ 'has-global-rose': store.panel !== 'home' }">
     <img v-if="store.panel !== 'home'" class="global-rose-watermark" :src="roseImage" alt="" aria-hidden="true" />
     <aside class="icon-rail">
       <Button class="brand-mark" :title="account.site.siteName" @click.stop="go('home')"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="Logo" /><span v-else>拾</span></Button>
@@ -267,37 +281,41 @@ watch(() => account.user?.id, (id, oldId) => {
       <div class="rail-bottom"><Button class="rail-button" title="系统设置与账号安全" :class="{ active: store.panel==='settings' }" @click.stop="store.navigate('settings')"><Settings2 :size="20" /></Button><Button class="rail-button" :class="{ active: store.panel === 'trash' }" title="回收站" @click.stop="go('trash')"><Trash2 :size="20" /></Button><Button class="avatar" :title="account.user.username + ' · 账户菜单'" aria-label="打开账户菜单" aria-haspopup="menu" @click.stop="accountMenuRef?.toggle($event)">{{ account.user.username.slice(0,1).toUpperCase() }}</Button><PrimeMenu ref="accountMenuRef" :model="accountItems" popup class="study-popup-menu account-popup-menu" /></div>
     </aside>
 
-    <aside class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar, 'sidebar-drag-over': sidebarDragOver }" @click.stop @dragenter="enterSidebar" @dragleave="leaveSidebar" @dragover.prevent @drop.prevent="dropRoot">
+    <aside id="folder-panel" class="folder-sidebar" :class="{ closed: !sidebarVisible, 'mobile-open': mobileSidebar, 'sidebar-drag-over': sidebarDragOver }" @click.stop @dragenter="enterSidebar" @dragleave="leaveSidebar" @dragover.prevent @drop.prevent="dropRoot">
       <div class="sidebar-inner">
-      <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><BookOpenText :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
+      <div class="sidebar-top"><div class="workspace-logo"><span class="workspace-symbol"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="" /><BookOpenText v-else :size="21" /></span><strong>{{ account.site.siteName }}</strong></div><Button class="icon-btn collapse-sidebar" title="收起侧边栏" @click="sidebarVisible = false; mobileSidebar = false"><PanelLeftClose :size="18" /></Button></div>
       <div class="sidebar-section-title"><span>我的文档</span><div class="sidebar-title-actions"><Button title="上传文件" @click="openUpload()"><Upload :size="16" /></Button><Button title="创建内容" @click.stop="addMenuRef?.toggle($event)"><Plus :size="17" /></Button></div></div>
       <PrimeMenu ref="addMenuRef" :model="addItems" popup class="study-popup-menu" />
       <div class="sidebar-tree custom-scroll" @contextmenu.prevent.stop="showMenu(null, $event)"><TreeNode v-for="item in roots" :key="item.id" :item="item" @menu="showMenu" /><div v-if="!roots.length" class="tree-zero">{{ store.loading ? '正在加载文档…' : '右键新建文档' }}</div></div>
       </div>
+      <PanelResizeHandle v-if="sidebarVisible && panels.desktop.value" side="left" :width="panels.widths.value.left" :min="220" :max="panels.leftMax.value" :default-width="284" controls="folder-panel" label="调整左侧文档栏宽度" @resize="panels.resize('left', $event)" @finish="panels.persist" />
     </aside>
 
     <main class="main-area">
       <header class="topbar">
         <Button v-if="!sidebarVisible" class="icon-btn reopen" title="打开侧边栏" @click.stop="sidebarVisible = true"><PanelLeftOpen :size="19" /></Button>
         <Button class="icon-btn mobile-menu-btn" title="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><Menu :size="20" /></Button>
-        <div class="breadcrumbs"><Button @click="go('home')">知识库</Button><template v-if="store.panel === 'document' && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><Button v-if="crumb.kind === 'folder'" @click="store.toggleFolder(crumb.id)">{{ crumb.name }}</Button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
+        <div class="breadcrumbs"><Button @click="go('home')">知识库</Button><template v-if="(store.panel === 'document' || store.panel === 'folder') && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><Button v-if="crumb.kind === 'folder'" @click="store.open(crumb.id)">{{ crumb.name }}</Button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
         <div class="topbar-right">
           <Button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); focusSearch()"><Search :size="19" /></Button>
-          <template v-if="store.panel === 'document' && active"><div class="topbar-split"></div><Button class="icon-btn star-toggle" :class="{ 'is-starred': active.starred }" :title="active.starred ? '取消收藏' : '收藏文档'" @click.stop="toggleStar()"><Star :size="19" :fill="active.starred ? 'currentColor' : 'none'" /></Button><div class="more-anchor"><Button class="icon-btn" text title="更多操作" @click.stop="moreMenuRef?.toggle($event)"><MoreHorizontal :size="21" /></Button><PrimeMenu ref="moreMenuRef" :model="moreItems" popup class="study-popup-menu" /></div></template>
+          <template v-if="(store.panel === 'document' || store.panel === 'folder') && active"><div class="topbar-split"></div><Button class="icon-btn star-toggle" :class="{ 'is-starred': active.starred }" :title="active.starred ? '取消收藏' : '收藏文档'" @click.stop="toggleStar()"><Star :size="19" :fill="active.starred ? 'currentColor' : 'none'" /></Button><div class="more-anchor"><Button class="icon-btn" text title="更多操作" @click.stop="moreMenuRef?.toggle($event)"><MoreHorizontal :size="21" /></Button><PrimeMenu ref="moreMenuRef" :model="moreItems" popup class="study-popup-menu" /></div></template>
           
         </div>
       </header>
       <div v-if="store.panel === 'search'" class="search-panel"><Search :size="21" /><InputText ref="searchInput" v-model="store.search" autofocus placeholder="搜索文档标题或正文内容..." /><Button v-if="store.search" class="icon-btn" @click="store.search = ''"><X :size="17" /></Button></div>
-      <div class="main-scroll custom-scroll" :class="{ 'document-scroll': store.panel === 'document', 'has-search': store.panel === 'search' }">
+      <div class="main-scroll custom-scroll" :class="{ 'document-scroll': store.panel === 'document', 'has-search': store.panel === 'search', 'editor-document-scroll': store.panel === 'document' && active?.kind === 'markdown' && markdownEditing, 'file-document-scroll': store.panel === 'document' && (active?.kind === 'pdf' || active?.kind === 'word') }">
         <SettingsView v-if="store.panel==='settings'" />
         <TransferView v-else-if="store.panel === 'transfers'" />
         <HomeView v-else-if="store.panel === 'home'" />
-        <DocumentView v-else-if="store.panel === 'document' && active" :key="active.id" ref="documentRef" :item="active" @outline="outline = $event" @download="downloadFile" />
-        <CollectionView v-else @create="(kind) => openModal(kind)" @upload="openUpload()" />
+        <CollectionView v-else-if="store.panel !== 'document'" @create="(kind) => openModal(kind, store.panel === 'folder' ? active?.id : null)" @upload="openUpload(store.panel === 'folder' ? active?.id : null)" />
+        <KeepAlive :key="account.user.id" :max="4">
+          <DocumentView v-if="store.panel === 'document' && active" :key="active.id" ref="documentRef" :item="active" @outline="outline = $event" @editing="markdownEditing = $event" @download="downloadFile" />
+        </KeepAlive>
       </div>
     </main>
 
-    <aside v-if="store.panel === 'document' && active && (active.kind === 'markdown' || active.kind === 'richtext')" class="outline-sidebar">
+    <aside v-if="panels.outlineVisible.value" id="outline-panel" class="outline-sidebar">
+      <PanelResizeHandle side="right" :width="panels.widths.value.right" :min="200" :max="panels.rightMax.value" :default-width="250" controls="outline-panel" label="调整右侧目录栏宽度" @resize="panels.resize('right', $event)" @finish="panels.persist" />
       <div class="outline-header"><AlignLeft :size="17" /><span>文章目录</span></div>
       <div class="outline-list custom-scroll"><Button v-for="heading in outline" :key="heading.index" :class="`outline-h${heading.level}`" @click="documentRef?.scrollToHeading(heading.index)">{{ heading.title }}</Button></div>
     </aside>
@@ -343,7 +361,7 @@ watch(() => account.user?.id, (id, oldId) => {
         </div>
       </form>
     </Dialog>
-    <FileUpload ref="fileInput" class="visually-hidden" mode="basic" auto custom-upload multiple accept=".md,.markdown,.html,.htm,.pdf,.docx" @uploader="handleFiles" />
+    <div class="visually-hidden" aria-hidden="true"><FileUpload ref="fileInput" mode="basic" auto custom-upload multiple accept=".md,.markdown,.html,.htm,.pdf,.docx" @uploader="handleFiles" /></div>
     <TransferFloat @open="store.navigate('transfers'); transfers.floatingVisible = false" />
 
     <div v-if="mobileSidebar" class="mobile-shade" @click="mobileSidebar = false"></div>

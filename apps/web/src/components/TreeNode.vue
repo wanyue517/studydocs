@@ -14,7 +14,7 @@ const over = ref(false);
 const children = computed(() => store.items.filter((x) => x.parentId === props.item.id)
   .sort((a,b) => Number(b.kind === 'folder') - Number(a.kind === 'folder') || a.name.localeCompare(b.name, 'zh-CN')));
 const opened = computed(() => store.expanded.includes(props.item.id));
-const selected = computed(() => store.panel === 'document' && store.activeId === props.item.id);
+const selected = computed(() => (store.panel === 'document' || store.panel === 'folder') && store.activeId === props.item.id);
 
 function showMenu(event: MouseEvent) { event.preventDefault(); event.stopPropagation(); emit('menu', props.item, event); }
 function dragStart(event: DragEvent) { event.dataTransfer?.setData('text/plain', props.item.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }
@@ -46,7 +46,6 @@ function drop(event: DragEvent) {
     </div>
     <div v-if="item.kind === 'folder' && opened" class="tree-children">
       <TreeNode v-for="child in children" :key="child.id" :item="child" :depth="(depth ?? 0) + 1" @menu="(item, event) => emit('menu', item, event)" />
-      <div v-if="!children.length" class="tree-empty" :style="{ paddingLeft: `${42 + (depth ?? 0) * 16}px` }">空文件夹</div>
     </div>
   </div>
 </template>
