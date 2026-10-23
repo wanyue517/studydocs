@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import TreeSelect from 'primevue/treeselect';
 import type { TreeNode } from 'primevue/treenode';
 import type { KnowledgeItem } from '@studydocs/shared';
@@ -41,8 +41,15 @@ function expandAll() {
   function visit(nodes: TreeNode[]) { for (const node of nodes) { if (node.children?.length) { keys[node.key!] = true; visit(node.children); } } }
   visit(options.value); expanded.value = keys;
 }
+async function collapseBranch(node: TreeNode) {
+  // TreeSelect publishes its expanded keys after the collapse event.
+  await nextTick();
+  const keys = { ...expanded.value };
+  function collapse(current: TreeNode) { delete keys[current.key!]; current.children?.forEach(collapse); }
+  collapse(node); expanded.value = keys;
+}
 watch(options, expandAll, { immediate: true });
 </script>
 <template>
-  <TreeSelect ref="picker" :model-value="selection" @update:model-value="updateSelection" v-model:expanded-keys="expanded" :input-id="inputId" :options="options" selection-mode="single" filter filter-placeholder="搜索文件夹" placeholder="选择文件夹" class="study-dialog-input folder-select" panel-class="folder-select-panel" scroll-height="320px" @before-show="expandAll" />
+  <TreeSelect ref="picker" :model-value="selection" @update:model-value="updateSelection" v-model:expanded-keys="expanded" :input-id="inputId" :options="options" selection-mode="single" filter filter-placeholder="搜索文件夹" placeholder="选择文件夹" class="study-dialog-input folder-select" panel-class="folder-select-panel" scroll-height="320px" @before-show="expandAll" @node-collapse="collapseBranch" />
 </template>

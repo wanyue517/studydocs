@@ -73,7 +73,19 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   }
   function toggleFolder(id: string) {
     const pos = expanded.value.indexOf(id);
-    if (pos === -1) expanded.value.push(id); else expanded.value.splice(pos, 1);
+    if (pos === -1) expanded.value.push(id);
+    else {
+      const collapsed = new Set([id]);
+      const descendants = [id];
+      for (const parentId of descendants) {
+        for (const item of items.value) {
+          if (item.parentId === parentId && item.kind === 'folder' && !collapsed.has(item.id)) {
+            collapsed.add(item.id); descendants.push(item.id);
+          }
+        }
+      }
+      expanded.value = expanded.value.filter(key => !collapsed.has(key));
+    }
     localStorage.setItem('studydocs-expanded', JSON.stringify(expanded.value));
   }
   function revealFolder(id: string) {

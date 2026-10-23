@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { AlignLeft, ChevronRight, Clock3, Home, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, ListChecks } from 'lucide-vue-next';
+import { AlignLeft, BookOpenText, FolderTree, ChevronRight, Clock3, Home, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Star, Trash2, Upload, X, ListChecks } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
 import TreeNode from './components/TreeNode.vue';
@@ -75,7 +75,7 @@ const crumbs = computed(() => {
   while (current) { list.unshift(current); current = store.items.find((x) => x.id === current?.parentId) ?? null; }
   return list;
 });
-const pageName = computed(() => store.panel === 'home' ? '我的知识库' : store.panel === 'favorites' ? '我的收藏' : store.panel === 'recent' ? '最近访问' : store.panel === 'trash' ? '回收站' : store.panel === 'search' ? '搜索' : store.panel === 'settings' ? '系统设置' : store.panel === 'transfers' ? '任务管理' : active.value?.name ?? '知识库');
+const pageName = computed(() => store.panel === 'home' ? '首页' : store.panel === 'favorites' ? '我的收藏' : store.panel === 'recent' ? '最近访问' : store.panel === 'trash' ? '回收站' : store.panel === 'search' ? '搜索' : store.panel === 'settings' ? '系统设置' : store.panel === 'transfers' ? '任务管理' : '');
 const modalTitle = computed(() => ({ folder: '新建文件夹', markdown: '新建 Markdown', richtext: '新建富文本', web: '收藏网页', rename: '重命名', move: '移动到文件夹' } as Record<ModalType,string>)[modal.value ?? 'folder']);
 
 function openModal(kind: ModalType, parentId: string | null = null, item: KnowledgeItem | null = null) {
@@ -251,13 +251,15 @@ watch(() => account.user?.id, (id, oldId) => {
 </script>
 
 <template>
-  <div v-if="!account.ready" class="auth-loading">正在加载拾页...</div>
+  <div v-if="!account.ready" class="auth-loading" role="status">正在加载网站配置…</div>
+  <div v-else-if="!account.siteLoaded" class="auth-loading"><div class="site-load-error" role="alert"><p>{{ account.message }}</p><Button label="重新加载" @click="account.bootstrap()" /></div></div>
   <AuthView v-else-if="!account.user" />
   <div v-else ref="shellRef" class="app-shell" :style="panels.style.value" :class="{ 'has-global-rose': store.panel !== 'home' }">
     <img v-if="store.panel !== 'home'" class="global-rose-watermark" :src="roseImage" alt="" aria-hidden="true" />
     <aside class="icon-rail">
-      <Button class="brand-mark" :title="account.site.siteName" @click.stop="go('home')"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="Logo" /><span v-else>拾</span></Button>
+      <Button class="brand-mark" :title="account.site.siteName" @click.stop="go('home')"><img v-if="account.site.logoUrl" :src="account.site.logoUrl" alt="Logo" /><BookOpenText v-else :size="25" /></Button>
       <div class="rail-separator"></div>
+      <Button class="rail-button mobile-folder-toggle" title="打开文档目录" aria-label="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><FolderTree :size="21" /></Button>
       <Button class="rail-button" :class="{ active: store.panel === 'home' }" title="知识库首页" @click.stop="go('home')"><Home :size="21" :stroke-width="1.9" /></Button>
       <Button class="rail-button" :class="{ active: store.panel === 'favorites' }" title="我的收藏" @click.stop="go('favorites')"><Star :size="21" :stroke-width="1.8" /></Button>
       <Button class="rail-button" :class="{ active: store.panel === 'recent' }" title="最近访问" @click.stop="go('recent')"><Clock3 :size="21" :stroke-width="1.8" /></Button>
@@ -277,8 +279,8 @@ watch(() => account.user?.id, (id, oldId) => {
     <main class="main-area">
       <header class="topbar">
         <Button v-if="!sidebarVisible" class="icon-btn reopen" title="打开侧边栏" @click.stop="sidebarVisible = true"><PanelLeftOpen :size="19" /></Button>
-        <Button class="icon-btn mobile-menu-btn" title="打开文档目录" @click.stop="mobileSidebar = !mobileSidebar"><Menu :size="20" /></Button>
-        <div class="breadcrumbs"><button type="button" @click="go('home')">知识库</button><template v-if="(store.panel === 'document' || store.panel === 'folder') && active"><template v-for="crumb in crumbs" :key="crumb.id"><ChevronRight :size="14" /><button v-if="crumb.kind === 'folder'" type="button" @click="store.open(crumb.id)">{{ crumb.name }}</button><strong v-else>{{ crumb.name }}</strong></template></template><template v-else><ChevronRight :size="14" /><strong>{{ pageName }}</strong></template></div>
+        <nav v-if="(store.panel === 'document' || store.panel === 'folder') && crumbs.length > 1" class="breadcrumbs" aria-label="文档路径"><template v-for="(crumb, index) in crumbs" :key="crumb.id"><ChevronRight v-if="index" :size="14" /><button v-if="index < crumbs.length - 1" type="button" @click="store.open(crumb.id)">{{ crumb.name }}</button><strong v-else aria-current="page">{{ crumb.name }}</strong></template></nav>
+        <span v-else-if="store.panel !== 'document' && store.panel !== 'folder'" class="topbar-page-title">{{ pageName }}</span>
         <div class="topbar-right">
           <div id="document-actions" class="document-actions"></div>
           <Button class="topbar-search icon-btn" title="搜索 Ctrl+K" @click.stop="store.navigate('search'); focusSearch()"><Search :size="19" /></Button>

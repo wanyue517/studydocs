@@ -192,3 +192,8 @@ body.resizing-panels iframe { pointer-events: none; }
 .folder-select .p-treeselect-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .folder-select-panel { max-width: min(480px, calc(100vw - 32px)); }
 .folder-select-panel .p-tree-node-label { overflow-wrap: anywhere; }
+
+.topbar-page-title { min-width: 0; font-size: 14px; color: var(--ink); }
+.icon-rail .mobile-folder-toggle { display: none; }
+.site-load-error { text-align: center; }
+@media (max-width: 770px) { .icon-rail .mobile-folder-toggle { display: inline-flex; } }
