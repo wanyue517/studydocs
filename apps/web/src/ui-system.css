@@ -28,7 +28,7 @@ body, .main-area, .document-view, .collection-view { color: var(--ink); }
   color: #546779;
 }
 .icon-btn.p-button:hover, .rail-button.p-button:hover, .sidebar-title-actions .p-button:hover,
-.tree-more.p-button:hover { background: #e8eff4; color: var(--accent); }
+.tree-more.p-button:hover { background: transparent; color: var(--accent); }
 .rail-button.p-button.active { background: var(--accent-light); color: var(--accent); }
 .brand-mark.p-button { padding: 0; background: var(--accent); border: 0; color: #fff; }
 .brand-mark.p-button:hover { background: #285570; }
@@ -44,7 +44,7 @@ body, .main-area, .document-view, .collection-view { color: var(--ink); }
 .search-trigger.p-button:hover { background: #e4eef5; color: var(--accent); }
 .breadcrumbs .p-button { padding: 3px 0; background: transparent; border: 0; color: #51647a; }
 .outline-list .p-button { width: 100%; justify-content: flex-start; border-radius: 4px; background: transparent; border: 0; }
-.outline-list .p-button:hover { color: var(--accent); background: #eff5f8; }
+.outline-list .p-button:hover { color: var(--accent); background: transparent; }
 .quick-grid .p-button, .doc-list .p-button.doc-list-item, .hero-button.p-button {
   font: inherit;
 }
@@ -57,7 +57,8 @@ body, .main-area, .document-view, .collection-view { color: var(--ink); }
 .document-toolbar .p-button.edit-toggle { color: #36516b; background: #fff; border: 1px solid #cddbe6; }
 .document-toolbar .p-button.edit-toggle:hover { color: var(--accent); border-color: #a8c3d5; }
 .rich-toolbar .p-button { width: 31px; height: 31px; min-width: 31px; padding: 0; background: transparent; border: 0; color: #506479; box-shadow: none; }
-.rich-toolbar .p-button:hover, .rich-toolbar .p-button.active { background: var(--accent-light); color: var(--accent); }
+.rich-toolbar .p-button:hover { color: var(--accent); }
+.rich-toolbar .p-button.active { background: var(--accent-light); color: var(--accent); }
 .rich-toolbar { background: #f6f9fb; border-color: #dce4eb; }
 .document-tag.p-tag { font-size:0.875rem; font-weight: 600; background: #eaf1f5; color: #355773; }
 .study-popup-menu.p-menu, .study-popup-menu.p-contextmenu {
@@ -88,7 +89,7 @@ body, .main-area, .document-view, .collection-view { color: var(--ink); }
 .settings-card .settings-number { width: 155px; }
 .settings-feedback.p-message { margin: 0 0 18px; }
 .storage-actions .p-button { padding: 6px 8px; font-size:0.875rem; color: var(--accent); }
-.storage-actions .p-button:hover { background: var(--accent-light); }
+.storage-actions .p-button:hover { background: transparent; color: #22445a; }
 .auth-card .p-password { display: flex; width: 100%; }
 .auth-card .p-password .p-inputtext { width: 100%; min-height: 43px; padding-right: 42px; }
 .auth-card .auth-submit.p-button { justify-content: center; background: var(--accent); border: 0; color: white; }

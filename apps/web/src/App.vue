@@ -4,6 +4,8 @@ import { AlignLeft, BookOpenText, ChevronRight, Clock3, Home, Menu, MoreHorizont
 import type { KnowledgeItem } from '@studydocs/shared';
 import { useKnowledgeStore } from './stores/knowledge';
 import TreeNode from './components/TreeNode.vue';
+import OutlineNode from './components/OutlineNode.vue';
+import { buildOutline, type Heading } from './lib/outline';
 import PanelResizeHandle from './components/PanelResizeHandle.vue';
 import { useSidebarWidths } from './composables/useSidebarWidths';
 import CollectionView from './components/CollectionView.vue';
@@ -28,7 +30,6 @@ import Toast from 'primevue/toast';
 import FileUpload from 'primevue/fileupload';
 import { useToast } from 'primevue/usetoast';
 
-interface Heading { level: number; title: string; index: number }
 type ModalType = 'folder' | 'markdown' | 'richtext' | 'web' | 'rename' | 'move';
 const store = useKnowledgeStore();
 const account = useAccountStore();
@@ -62,6 +63,7 @@ const fileInput = ref<InstanceType<typeof FileUpload> | null>(null);
 const searchInput = ref<InstanceType<typeof InputText> | null>(null);
 const documentRef = ref<{ scrollToHeading: (i: number) => void } | null>(null);
 const outline = ref<Heading[]>([]);
+const outlineTree = computed(() => buildOutline(outline.value));
 const sidebarDragOver = ref(false);
 let sidebarDragDepth = 0;
 
@@ -324,7 +326,7 @@ watch(() => account.user?.id, (id, oldId) => {
     <aside v-if="panels.outlineVisible.value" id="outline-panel" class="outline-sidebar">
       <PanelResizeHandle side="right" :width="panels.widths.value.right" :min="200" :max="panels.rightMax.value" :default-width="250" controls="outline-panel" label="调整右侧目录栏宽度" @resize="panels.resize('right', $event)" @finish="panels.persist" />
       <div class="outline-header"><AlignLeft :size="17" /><span>文章目录</span></div>
-      <div class="outline-list custom-scroll"><Button v-for="heading in outline" :key="heading.index" :class="`outline-h${heading.level}`" @click="documentRef?.scrollToHeading(heading.index)">{{ heading.title }}</Button></div>
+      <nav class="outline-list custom-scroll" aria-label="文章目录"><ul class="outline-tree"><OutlineNode v-for="entry in outlineTree" :key="entry.index" :entry="entry" @navigate="documentRef?.scrollToHeading($event)" /></ul></nav>
     </aside>
 
     <ContextMenu ref="contextMenuRef" :model="contextItems" class="study-popup-menu" />

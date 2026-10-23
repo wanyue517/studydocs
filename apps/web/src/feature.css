@@ -77,7 +77,7 @@ body, .main-area, .document-view, .collection-view, .settings-page { color: var(
 .outline-sidebar { width: 250px; min-height: 0; }
 .outline-list { min-height: 0; }
 .outline-list .p-button {
-  flex: 0 0 auto; height: auto; min-height: 42px; font-size: 1rem;
+  flex: 0 0 auto; height: auto; min-height: 34px; font-size: .875rem;
   line-height: 1.6; white-space: normal; overflow-wrap: anywhere;
   word-break: break-word; align-items: flex-start;
 }

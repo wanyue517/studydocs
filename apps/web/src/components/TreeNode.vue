@@ -31,8 +31,8 @@ function drop(event: DragEvent) {
 </script>
 
 <template>
-  <div class="tree-node">
-    <div class="tree-line" :class="{ selected, 'drag-over': over }" :style="{ paddingLeft: `${8 + (depth ?? 0) * 16}px` }"
+  <div class="tree-node" :style="{ '--tree-branch-x': `${15 + ((depth ?? 0) - 1) * 20}px` }">
+    <div class="tree-line" :class="{ selected, 'drag-over': over }" :style="{ paddingLeft: `${8 + (depth ?? 0) * 20}px` }"
       draggable="true" @dragstart="dragStart" @click="store.open(item.id)" @contextmenu="showMenu"
       @dragover="item.kind === 'folder' && ($event.preventDefault(), over = true)"
       @dragleave="over = false" @drop.stop.prevent="drop">
@@ -44,7 +44,7 @@ function drop(event: DragEvent) {
       <Star v-if="item.starred" :size="12" class="mini-star" fill="currentColor" />
       <Button class="tree-more icon-btn" title="更多操作" @click="showMenu"><MoreHorizontal :size="16" /></Button>
     </div>
-    <div v-if="item.kind === 'folder' && opened" class="tree-children">
+    <div v-if="item.kind === 'folder' && opened && children.length" class="tree-children">
       <TreeNode v-for="child in children" :key="child.id" :item="child" :depth="(depth ?? 0) + 1" @menu="(item, event) => emit('menu', item, event)" />
     </div>
   </div>

@@ -9,6 +9,7 @@ import './style.css';
 import './refinements.css';
 import './ui-system.css';
 import './feature.css';
+import './navigation.css';
 
 createApp(App)
   .use(createPinia())

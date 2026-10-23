@@ -1,0 +1,68 @@
+/* Navigation uses text/icon contrast; filled actions and selected states retain
+   their own surfaces. Keyboard focus rings remain visible throughout the UI. */
+:root { --hover-ink: #22445a; --hierarchy-line: #aebfcd; }
+.breadcrumbs .p-button.p-component:not(:disabled):is(:hover, :active, :focus-visible),
+.outline-list .outline-link.p-button:not(:disabled):is(:hover, :active, :focus-visible) {
+  color: var(--hover-ink); background: transparent; border-color: transparent; box-shadow: none;
+}
+.icon-btn.p-button.p-component:not(:disabled):is(:hover, :active),
+.sidebar-title-actions .p-button.p-component:not(:disabled):is(:hover, :active) {
+  color: var(--hover-ink); background: transparent; box-shadow: none;
+}
+.rail-button.p-button:not(.active):not(:disabled):is(:hover, :active) { color: var(--hover-ink); background: transparent; }
+.p-button.p-button-text:not(:disabled):is(:hover, :active),
+.p-button.p-button-link:not(:disabled):is(:hover, :active) { background: transparent; }
+.p-button.p-button-text:not(:is(.p-button-danger, .p-button-success, .p-button-info, .p-button-warn, .p-button-help, .p-button-contrast)):not(:disabled):hover,
+.p-button.p-button-link:not(:is(.p-button-danger, .p-button-success, .p-button-info, .p-button-warn, .p-button-help, .p-button-contrast)):not(:disabled):hover { color: var(--hover-ink); }
+.p-button.p-button-outlined:not(:is(.p-button-danger, .p-button-success, .p-button-info, .p-button-warn, .p-button-help, .p-button-contrast)):not(:disabled):hover { color: var(--hover-ink); border-color: var(--accent); }
+.p-button.p-button-danger.p-button-text:not(:disabled):hover { color: #a52f2f; }
+.rich-toolbar .p-button.p-component:not(.active):not(:disabled):hover { background: transparent; color: var(--hover-ink); }
+.rich-toolbar .p-button.active { background: var(--accent-light); }
+.settings-tabs.study-segmented .p-togglebutton:not(.p-togglebutton-checked):not(:disabled):hover {
+  background: var(--study-surface); color: var(--hover-ink); border-color: var(--accent);
+}
+.doc-list-item:hover .list-main strong { color: var(--accent); }
+.doc-list-item:hover .list-arrow { color: var(--accent); transform: translateX(2px); }
+.storage-actions .p-button:not(:disabled):hover { background: transparent; }
+.transfer-clear:hover { color: var(--accent); border-color: var(--accent); }
+.transfer-float-link:hover, .pdf-native-link:hover { color: var(--hover-ink); text-decoration: underline; text-underline-offset: 3px; }
+.article-inner a:hover { color: var(--hover-ink); text-decoration: underline; text-underline-offset: 3px; }
+.tree-line:hover .tree-name { color: var(--accent); }
+.tree-line:focus-within .tree-more { opacity: 1; }
+
+/* A real nested list provides consistent hierarchy even when headings skip a
+   level. Branches end at the final child instead of running past the group. */
+.outline-tree, .outline-children { list-style: none; margin: 0; padding: 0; }
+.outline-tree { padding: 2px; }
+.outline-children { margin-left: 8px; padding-left: 12px; }
+.outline-node { position: relative; min-width: 0; }
+.outline-list .outline-link.p-button {
+  width: 100%; display: flex; align-items: flex-start; justify-content: flex-start;
+  min-height: 34px; height: auto; padding: 6px 8px; border: 0; background: transparent;
+  color: var(--muted); font-size: .875rem; font-weight: 400; line-height: 1.6;
+  text-align: left; white-space: normal; overflow-wrap: anywhere;
+}
+.outline-text { min-width: 0; }
+.outline-link:focus-visible { outline-offset: -2px; }
+.outline-list .outline-link.outline-h1 { font-weight: 650; color: var(--ink); }
+.outline-list .outline-link.outline-h2 { font-weight: 550; color: #35485e; }
+.outline-list .outline-h3, .outline-list .outline-h4,
+.outline-list .outline-h5, .outline-list .outline-h6 { font-weight: 400; }
+.outline-children > .outline-node::before,
+.outline-children > .outline-node::after {
+  content: ''; position: absolute; left: -12px; pointer-events: none; border-color: var(--hierarchy-line); z-index: 1;
+}
+.outline-children > .outline-node::before { top: 0; bottom: 0; border-left: 1px solid var(--hierarchy-line); }
+.outline-children > .outline-node::after { top: 17px; width: 10px; border-top: 1px solid var(--hierarchy-line); }
+.outline-children > .outline-node:last-child::before { bottom: auto; height: 17px; }
+
+.tree-node, .tree-children { position: relative; }
+.tree-children::before { content: ''; position: absolute; top: -12px; left: calc(var(--tree-branch-x) + 20px); height: 12px; border-left: 1px solid var(--hierarchy-line); pointer-events: none; }
+.tree-children > .tree-node::before,
+.tree-children > .tree-node::after {
+  content: ''; position: absolute; left: var(--tree-branch-x); pointer-events: none; border-color: var(--hierarchy-line); z-index: 1;
+}
+.tree-children > .tree-node::before { top: 0; bottom: 0; border-left: 1px solid var(--hierarchy-line); }
+.tree-children > .tree-node::after { top: 20px; width: 12px; border-top: 1px solid var(--hierarchy-line); }
+.tree-children > .tree-node:last-child::before { bottom: auto; height: 20px; }
+@media (prefers-reduced-motion: reduce) { .doc-list-item:hover .list-arrow { transform: none; } }

@@ -2,7 +2,14 @@ import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 
 // 深海蓝灰：低饱和交互强调色 + 高对比石墨文字，统一 PrimeVue 组件色板。
+const unfilledButtonStates = Object.fromEntries(
+  ['primary', 'secondary', 'success', 'info', 'warn', 'help', 'danger', 'contrast', 'plain']
+    .map((severity) => [severity, { hoverBackground: 'transparent', activeBackground: 'transparent' }]),
+);
 const StudyTheme = definePreset(Aura, {
+  components: {
+    button: { colorScheme: { light: { text: unfilledButtonStates, outlined: unfilledButtonStates } } },
+  },
   semantic: {
     primary: {
       50: '#f2f7fa',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { MdEditor, MdPreview } from 'md-editor-v3';
+import { MdEditor, MdPreview, type HeadList } from 'md-editor-v3';
+import type { Heading } from '../lib/outline';
 import 'md-editor-v3/lib/style.css';
 import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, LoaderCircle } from 'lucide-vue-next';
 import type { KnowledgeItem } from '@studydocs/shared';
@@ -18,7 +19,6 @@ import { previewKey, readPreview, savePreview } from '../lib/preview-cache';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 
-interface Heading { level: number; title: string; index: number }
 const props = defineProps<{ item: KnowledgeItem }>();
 const emit = defineEmits<{ outline: [items: Heading[]]; editing: [value: boolean]; download: [item: KnowledgeItem] }>();
 const store = useKnowledgeStore();
@@ -43,13 +43,18 @@ let wordController: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saveChain: Promise<unknown> = Promise.resolve();
 const editable = computed(() => props.item.kind === 'markdown' || props.item.kind === 'richtext');
+const markdownHeadings = ref<Heading[]>([]);
+function updateMarkdownCatalog(items: HeadList[]) {
+  markdownHeadings.value = items.map((item, index) => ({
+    level: Number(item.currentToken?.tag.slice(1)) || item.level,
+    title: item.text, index,
+  }));
+}
 const headings = computed<Heading[]>(() => {
-  if (props.item.kind === 'markdown') {
-    return draft.value.split('\n').flatMap((line) => { const m = /^(#{1,4})\s+(.+)\s*$/.exec(line); return m ? [{ level: m[1].length, title: m[2].replace(/[*_`]/g, ''), index: 0 }] : []; }).map((x, index) => ({ ...x, index }));
-  }
+  if (props.item.kind === 'markdown') return markdownHeadings.value;
   if (props.item.kind === 'richtext') {
     const html = new DOMParser().parseFromString(draft.value, 'text/html');
-    return Array.from(html.querySelectorAll('h1,h2,h3,h4')).map((x, index) => ({ level: Number(x.tagName[1]), title: x.textContent ?? '', index }));
+    return Array.from(html.querySelectorAll('h1,h2,h3,h4,h5,h6')).map((x, index) => ({ level: Number(x.tagName[1]), title: x.textContent ?? '', index }));
   }
   return [];
 });
@@ -80,7 +85,7 @@ function persist() {
 function setEditing(value: boolean) { if (!value) { if (timer) clearTimeout(timer); void persist(); } editing.value = value; }
 function scrollToHeading(index: number) {
   const root = documentEl.value;
-  const headings = root?.querySelectorAll<HTMLElement>('.article-inner .md-editor-preview h1,.article-inner .md-editor-preview h2,.article-inner .md-editor-preview h3,.article-inner .md-editor-preview h4,.article-inner .tiptap-editor h1,.article-inner .tiptap-editor h2,.article-inner .tiptap-editor h3,.article-inner .tiptap-editor h4');
+  const headings = root?.querySelectorAll<HTMLElement>('.article-inner :is(.md-editor-preview,.tiptap-editor) :is(h1,h2,h3,h4,h5,h6)');
   const heading = headings?.[index];
   const boundary = root?.closest<HTMLElement>('.main-scroll');
   if (!heading?.getClientRects().length || !boundary) return;
@@ -157,8 +162,8 @@ onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(obj
     <div v-if="item.kind === 'markdown' || item.kind === 'richtext'" class="article-inner">
       <div v-if="item.kind !== 'markdown' || !editing" class="article-intro"><h1>{{ item.name }}</h1></div>
       <div v-if="item.kind === 'markdown'" class="markdown-wrapper" :class="{ editing }">
-        <MdEditor v-if="editing" v-model="draft" language="zh-CN" theme="light" preview-theme="github" :toolbars-exclude="['github','save','htmlPreview','catalog']" class="md-edit-area" />
-        <MdPreview v-else :id="`md-${item.id}`" :model-value="draft" theme="light" preview-theme="github" class="md-read-area" />
+        <MdEditor v-if="editing" @on-get-catalog="updateMarkdownCatalog" v-model="draft" language="zh-CN" theme="light" preview-theme="github" :toolbars-exclude="['github','save','htmlPreview','catalog']" class="md-edit-area" />
+        <MdPreview v-else @on-get-catalog="updateMarkdownCatalog" :id="`md-${item.id}`" :model-value="draft" theme="light" preview-theme="github" class="md-read-area" />
       </div>
       <RichTextEditor v-else v-model="draft" :editable="editing" />
     </div>
