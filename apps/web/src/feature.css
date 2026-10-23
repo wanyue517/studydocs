@@ -187,3 +187,8 @@ body.resizing-panels iframe { pointer-events: none; }
   .document-actions-content { gap: 2px; }
   .document-actions-content .save-state, .document-action-label { display: none; }
 }
+
+.folder-select.p-treeselect { width: 100%; min-height: 42px; align-items: center; }
+.folder-select .p-treeselect-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folder-select-panel { max-width: min(480px, calc(100vw - 32px)); }
+.folder-select-panel .p-tree-node-label { overflow-wrap: anywhere; }

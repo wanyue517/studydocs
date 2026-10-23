@@ -21,7 +21,7 @@ import roseImage from './assets/gold-rose.webp';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import Select from 'primevue/select';
+import FolderSelect from './components/FolderSelect.vue';
 import PrimeMenu from 'primevue/menu';
 import ContextMenu from 'primevue/contextmenu';
 import ConfirmDialog from 'primevue/confirmdialog';
@@ -77,31 +77,6 @@ const crumbs = computed(() => {
 });
 const pageName = computed(() => store.panel === 'home' ? '我的知识库' : store.panel === 'favorites' ? '我的收藏' : store.panel === 'recent' ? '最近访问' : store.panel === 'trash' ? '回收站' : store.panel === 'search' ? '搜索' : store.panel === 'settings' ? '系统设置' : store.panel === 'transfers' ? '任务管理' : active.value?.name ?? '知识库');
 const modalTitle = computed(() => ({ folder: '新建文件夹', markdown: '新建 Markdown', richtext: '新建富文本', web: '收藏网页', rename: '重命名', move: '移动到文件夹' } as Record<ModalType,string>)[modal.value ?? 'folder']);
-const moveFolders = computed(() => store.items.filter((candidate) => {
-  const item = modalItem.value;
-  if (candidate.kind !== 'folder' || candidate.id === item?.id) return false;
-  if (item?.kind !== 'folder') return true;
-  let parent = candidate.parentId;
-  while (parent) {
-    if (parent === item.id) return false;
-    parent = store.items.find((entry) => entry.id === parent)?.parentId ?? null;
-  }
-  return true;
-}).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')));
-const moveOptions = computed(() => [
-  { label: '根目录', value: '' },
-  ...moveFolders.value.map((folder) => ({ label: folderPath(folder), value: folder.id })),
-]);
-function folderPath(folder: KnowledgeItem): string {
-  const parts = [folder.name];
-  let parent = folder.parentId;
-  while (parent) {
-    const next = store.items.find((entry) => entry.id === parent);
-    if (!next) break;
-    parts.unshift(next.name); parent = next.parentId;
-  }
-  return parts.join(' / ');
-}
 
 function openModal(kind: ModalType, parentId: string | null = null, item: KnowledgeItem | null = null) {
   menu.value = null;
@@ -343,8 +318,7 @@ watch(() => account.user?.id, (id, oldId) => {
           </div>
           <div class="study-field">
             <label for="move-target">目标位置</label>
-            <Select input-id="move-target" v-model="moveDestination" :options="moveOptions"
-              option-label="label" option-value="value" filter class="study-dialog-input" />
+            <FolderSelect input-id="move-target" :model-value="moveDestination" :items="store.items" :exclude-id="modalItem?.id" @update:model-value="moveDestination = $event ?? ''" />
           </div>
         </template>
         <template v-else>
@@ -358,9 +332,10 @@ watch(() => account.user?.id, (id, oldId) => {
             <InputText id="new-url" v-model="modalUrl" type="url" required
               placeholder="https://example.com" class="study-dialog-input" />
           </div>
-          <p v-if="modal !== 'rename'" class="study-dialog-location">
-            保存到：{{ modalParent ? store.items.find((x) => x.id === modalParent)?.name ?? '根目录' : '根目录' }}
-          </p>
+          <div v-if="modal !== 'rename'" class="study-field">
+            <label for="create-folder-target">保存到</label>
+            <FolderSelect input-id="create-folder-target" v-model="modalParent" :items="store.items" />
+          </div>
         </template>
         <div class="study-dialog-actions">
           <Button type="button" label="取消" severity="secondary" outlined :disabled="creating" @click="modal = null" />
