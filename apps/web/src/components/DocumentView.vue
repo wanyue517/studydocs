@@ -23,6 +23,7 @@ const draft = ref(props.item.content);
 const saving = ref(false);
 const dirty = ref(false);
 const fileError = ref('');
+const documentEl = ref<HTMLElement | null>(null);
 const wordEl = ref<HTMLElement | null>(null);
 const fileUrl = ref('');
 const previewReady = ref(false);
@@ -74,10 +75,23 @@ function persist() {
 }
 function setEditing(value: boolean) { if (!value) { if (timer) clearTimeout(timer); void persist(); } editing.value = value; }
 function scrollToHeading(index: number) {
-  const root = document.querySelector('.document-view .article-inner');
-  const els = root?.querySelectorAll('.md-editor-preview h1,.md-editor-preview h2,.md-editor-preview h3,.md-editor-preview h4,.tiptap-editor h1,.tiptap-editor h2,.tiptap-editor h3,.tiptap-editor h4');
-  els?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const root = documentEl.value;
+  const headings = root?.querySelectorAll<HTMLElement>('.article-inner .md-editor-preview h1,.article-inner .md-editor-preview h2,.article-inner .md-editor-preview h3,.article-inner .md-editor-preview h4,.article-inner .tiptap-editor h1,.article-inner .tiptap-editor h2,.article-inner .tiptap-editor h3,.article-inner .tiptap-editor h4');
+  const heading = headings?.[index];
+  const boundary = root?.closest<HTMLElement>('.main-scroll');
+  if (!heading?.getClientRects().length || !boundary) return;
+  // scrollIntoView also scrolls overflow:hidden ancestors, shifting the shell
+  // and header. Scroll only the nearest actual content scrollport instead.
+  let container = heading.parentElement;
+  while (container && container !== boundary) {
+    if (/(auto|scroll)/.test(getComputedStyle(container).overflowY) && container.scrollHeight > container.clientHeight) break;
+    container = container.parentElement;
+  }
+  if (!container || !boundary.contains(container) || !/(auto|scroll)/.test(getComputedStyle(container).overflowY)) return;
+  const top = container.scrollTop + heading.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientTop - 16;
+  container.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
 }
+
 defineExpose({ scrollToHeading });
 async function renderWord() {
   if (props.item.kind !== 'word' || !wordEl.value) return;
@@ -125,7 +139,7 @@ onDeactivated(() => { active = false; if (timer) clearTimeout(timer); if (dirty.
 onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); wordController?.abort(); if (timer) clearTimeout(timer); if (dirty.value) void persist(); });
 </script>
 <template>
-  <div class="document-view" :class="{ 'file-document': item.kind === 'pdf' || item.kind === 'word', 'markdown-editing': item.kind === 'markdown' && editing }">
+  <div ref="documentEl" class="document-view" :class="{ 'file-document': item.kind === 'pdf' || item.kind === 'word', 'markdown-editing': item.kind === 'markdown' && editing }">
     <div class="document-toolbar">
       <Tag class="document-tag" :value="kindLabel[item.kind]" severity="secondary" />
       <span class="document-date">更新于 {{ fmtDate(item.updatedAt) }}</span>

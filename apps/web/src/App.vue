@@ -45,6 +45,7 @@ const dialogVisible = computed({
   set: (visible: boolean) => { if (!visible && !creating.value) modal.value = null; },
 });
 const modalName = ref('');
+const modalNameInput = ref<InstanceType<typeof InputText> | null>(null);
 const modalUrl = ref('');
 const modalParent = ref<string | null>(null);
 const modalItem = ref<KnowledgeItem | null>(null);
@@ -106,6 +107,12 @@ function openModal(kind: ModalType, parentId: string | null = null, item: Knowle
   modalName.value = item?.name ?? (kind === 'folder' ? '新建文件夹' : kind === 'markdown' ? '未命名笔记' : kind === 'richtext' ? '未命名文档' : '网页收藏');
   modalUrl.value = item?.url ?? '';
   if (kind === 'move') moveDestination.value = item?.parentId ?? '';
+}
+async function selectModalName() {
+  await nextTick();
+  if (!modal.value || modal.value === 'move') return;
+  const input = (modalNameInput.value as unknown as { $el: HTMLInputElement } | null)?.$el;
+  if (input instanceof HTMLInputElement) { input.focus({ preventScroll: true }); input.select(); }
 }
 async function submitModal() {
   if (!modal.value || (modal.value !== 'move' && !modalName.value.trim()) || creating.value) return;
@@ -324,7 +331,7 @@ watch(() => account.user?.id, (id, oldId) => {
     <ConfirmDialog class="study-confirm-dialog" />
     <Toast position="bottom-center" />
     <Dialog v-model:visible="dialogVisible" modal :draggable="false" :closable="!creating"
-      :close-on-escape="!creating" :header="modalTitle" class="study-dialog"
+      :close-on-escape="!creating" :header="modalTitle" class="study-dialog" @show="selectModalName"
       :style="{ width: 'min(480px, calc(100vw - 32px))' }">
       <form class="study-dialog-form" @submit.prevent="submitModal">
         <template v-if="modal === 'move'">
@@ -341,7 +348,7 @@ watch(() => account.user?.id, (id, oldId) => {
         <template v-else>
           <div class="study-field">
             <label for="new-name">{{ modal === 'folder' ? '文件夹名称' : '名称' }}</label>
-            <InputText id="new-name" v-model="modalName" autofocus maxlength="140" required
+            <InputText ref="modalNameInput" id="new-name" v-model="modalName" autofocus maxlength="140" required
               placeholder="输入名称" class="study-dialog-input" />
           </div>
           <div v-if="modal === 'web'" class="study-field">
