@@ -1,8 +1,7 @@
 /* Navigation uses text/icon contrast; filled actions and selected states retain
    their own surfaces. Keyboard focus rings remain visible throughout the UI. */
 :root { --hover-ink: #22445a; --hierarchy-line: #aebfcd; }
-.breadcrumbs .p-button.p-component:not(:disabled):is(:hover, :active, :focus-visible),
-.outline-list .outline-link.p-button:not(:disabled):is(:hover, :active, :focus-visible) {
+.breadcrumbs .p-button.p-component:not(:disabled):is(:hover, :active, :focus-visible) {
   color: var(--hover-ink); background: transparent; border-color: transparent; box-shadow: none;
 }
 .icon-btn.p-button.p-component:not(:disabled):is(:hover, :active),
@@ -36,18 +35,24 @@
 .outline-tree { padding: 2px; }
 .outline-children { margin-left: 8px; padding-left: 12px; }
 .outline-node { position: relative; min-width: 0; }
-.outline-list .outline-link.p-button {
+.outline-list .outline-link {
   width: 100%; display: flex; align-items: flex-start; justify-content: flex-start;
   min-height: 34px; height: auto; padding: 6px 8px; border: 0; background: transparent;
   color: var(--muted); font-size: .875rem; font-weight: 400; line-height: 1.6;
   text-align: left; white-space: normal; overflow-wrap: anywhere;
 }
 .outline-text { min-width: 0; }
-.outline-link:focus-visible { outline-offset: -2px; }
+/* Text-only navigation: all interaction states keep identical geometry. */
+.outline-list .outline-link,
+.outline-list .outline-link:is(:hover, :active, :focus, :focus-visible) {
+  border: 0; outline: 0; box-shadow: none; background: transparent;
+  border-radius: 0; transform: none; transition: color .15s ease;
+}
 .outline-list .outline-link.outline-h1 { font-weight: 650; color: var(--ink); }
 .outline-list .outline-link.outline-h2 { font-weight: 550; color: #35485e; }
 .outline-list .outline-h3, .outline-list .outline-h4,
 .outline-list .outline-h5, .outline-list .outline-h6 { font-weight: 400; }
+.outline-list .outline-link:is(:hover, :active, :focus, :focus-visible) { color: var(--hover-ink); }
 .outline-children > .outline-node::before,
 .outline-children > .outline-node::after {
   content: ''; position: absolute; left: -12px; pointer-events: none; border-color: var(--hierarchy-line); z-index: 1;
