@@ -197,3 +197,10 @@ body.resizing-panels iframe { pointer-events: none; }
 .icon-rail .mobile-folder-toggle { display: none; }
 .site-load-error { text-align: center; }
 @media (max-width: 770px) { .icon-rail .mobile-folder-toggle { display: inline-flex; } }
+
+/* Stretch all PDF startup states across the full reading area. */
+.file-document > .pdf-preview-area > .preview-loading,
+.file-document > .pdf-preview-area > .file-error { align-self: stretch; width: 100%; flex: 1 1 0; text-align: center; }
+.pdf-bootstrap { position: absolute; visibility: hidden; pointer-events: none; }
+.pdf-continuous-pages { position: relative; width: 100%; }
+.pdf-page-slot { position: absolute; left: 0; right: 0; }

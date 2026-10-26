@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
-import VuePdfEmbed, { GlobalWorkerOptions } from 'vue-pdf-embed/dist/index.essential.mjs';
+import VuePdfEmbed, { GlobalWorkerOptions, usePdfDocument } from 'vue-pdf-embed/dist/index.essential.mjs';
 import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 GlobalWorkerOptions.workerSrc = pdfWorker;
 import 'vue-pdf-embed/dist/styles/annotationLayer.css';
@@ -11,6 +11,7 @@ import PdfThumbnails from './PdfThumbnails.vue';
 import { ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, Minus, Plus, PanelLeft } from 'lucide-vue-next';
 import { MAX_PREVIEW_BYTES, savePreview } from '../lib/preview-cache';
 import { yieldToBrowser } from '../lib/transfer-work';
+import { pageAtOffset, pageOffsets } from '../lib/pdf-layout';
 
 const props = defineProps<{ source: string; cacheKey: string; size: number; cached: boolean }>();
 const positionKey = `studydocs-reader:${props.cacheKey}`;
@@ -24,46 +25,79 @@ const mode = ref(position.mode === 'width' ? 'width' : 'reading');
 const thumbnails = ref(position.thumbnails && !window.matchMedia('(max-width: 770px)').matches);
 const zoom = ref(Math.max(0.5, Math.min(2, Number(position.zoom) || 1)));
 const width = ref(0);
+const height = ref(600);
+const scrollTop = ref(0);
+const ratios = ref<number[]>([]);
+const offsets = computed(() => pageOffsets(ratios.value, pageWidth.value));
+const visiblePages = computed(() => {
+  if (!pages.value) return [];
+  const start = Math.max(0, pageAtOffset(offsets.value, scrollTop.value) - 1);
+  const end = Math.min(pages.value - 1, pageAtOffset(offsets.value, scrollTop.value + height.value) + 1);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index + 1);
+});
 const loading = ref(true);
 const error = ref('');
 const progress = ref(0);
 let observer: ResizeObserver | undefined;
 let stopped = false;
-let restorePosition = true;
 let positionTimer: ReturnType<typeof setTimeout> | undefined;
 function savePosition() {
   if (positionTimer) clearTimeout(positionTimer);
   position = { mode: mode.value, thumbnails: thumbnails.value, page: page.value, zoom: zoom.value, top: viewport.value?.scrollTop ?? 0, left: viewport.value?.scrollLeft ?? 0 };
   try { sessionStorage.setItem(positionKey, JSON.stringify(position)); } catch { /* Reading also works without storage. */ }
 }
-function scrolled() { if (positionTimer) clearTimeout(positionTimer); positionTimer = setTimeout(savePosition, 200); }
-function rendered() {
-  loading.value = false;
-  if (restorePosition) { viewport.value?.scrollTo({ top: position.top, left: position.left }); restorePosition = false; }
+function scrolled() {
+  scrollTop.value = viewport.value?.scrollTop ?? 0;
+  if (document.value) page.value = pageAtOffset(offsets.value, scrollTop.value + 16) + 1;
+  if (positionTimer) clearTimeout(positionTimer); positionTimer = setTimeout(savePosition, 200);
 }
-watch([page, zoom, mode, thumbnails], savePosition);
+function rendered(number: number) {
+  if (number !== page.value) return;
+  loading.value = false;
+}
+watch(thumbnails, savePosition);
 const source = computed(() => ({
   url: props.source,
   cMapUrl: `${import.meta.env.BASE_URL}pdf-assets/cmaps/`, cMapPacked: true,
   standardFontDataUrl: `${import.meta.env.BASE_URL}pdf-assets/standard_fonts/`,
   wasmUrl: `${import.meta.env.BASE_URL}pdf-assets/wasm/`,
 }));
+const { doc: loadedDocument } = usePdfDocument({
+  source,
+  onError: failed,
+  onProgress: (event) => { progress.value = event.total ? Math.min(100, Math.round(event.loaded / event.total * 100)) : 0; },
+  onPasswordRequest: () => { loading.value = false; error.value = '此文件需要密码，请使用浏览器打开'; },
+});
+watch(loadedDocument, (doc) => { if (doc) void loaded(doc).catch(failed); });
 const pageWidth = computed(() => Math.max(100, Math.min(width.value - 32, mode.value === 'reading' ? 900 : Infinity) * zoom.value));
-watch(pageWidth, () => { if (!error.value) loading.value = true; });
-// Full-size rendering is limited to the selected page; thumbnails share its document.
+watch(pageWidth, async (_, previous) => {
+  if (!previous || !document.value) return;
+  const anchor = page.value;
+  await nextTick();
+  viewport.value?.scrollTo({ top: offsets.value[anchor - 1] ?? 0 });
+  scrolled();
+});
+// Only visible pages and one neighbouring page are rendered at full resolution.
 function selectPage(value: number) {
   const next = Math.max(1, Math.min(pages.value || 1, Math.trunc(value) || 1));
-  if (next === page.value) return;
   page.value = next;
-  loading.value = true;
-  viewport.value?.scrollTo({ top: 0, left: 0 });
+  viewport.value?.scrollTo({ top: offsets.value[next - 1] ?? 0 });
+  scrolled();
 }
 function setZoom(value: number) { zoom.value = Math.max(0.5, Math.min(2, value)); }
 function failed(reason: Error) { loading.value = false; error.value = `PDF 预览失败：${reason.message || '无法读取文件'}`; }
 async function loaded(doc: PDFDocumentProxy) {
-  document.value = doc;
   pages.value = doc.numPages;
+  ratios.value = Array(doc.numPages).fill(Math.SQRT2);
   page.value = Math.min(page.value, doc.numPages);
+  const first = await doc.getPage(page.value);
+  const initial = first.getViewport({ scale: 1 });
+  ratios.value[page.value - 1] = initial.height / initial.width;
+  document.value = doc;
+  await nextTick();
+  viewport.value?.scrollTo({ top: position.top || offsets.value[page.value - 1] || 0, left: position.left });
+  scrollTop.value = viewport.value?.scrollTop ?? 0;
+  void measurePages(doc);
   if (props.cached || props.size > MAX_PREVIEW_BYTES) return;
   // Keep the first-page path progressive. Persist the full file in the background.
   try {
@@ -73,9 +107,26 @@ async function loaded(doc: PDFDocumentProxy) {
     if (!stopped) await savePreview(props.cacheKey, new Blob([data as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }));
   } catch { /* Eviction or cache failures do not interrupt reading. */ }
 }
+async function measurePages(doc: PDFDocumentProxy) {
+  for (let number = 1; number <= doc.numPages && !stopped; number++) {
+    try {
+      const pdfPage = await doc.getPage(number);
+      if (stopped) return;
+      const size = pdfPage.getViewport({ scale: 1 });
+      const index = pageAtOffset(offsets.value, viewport.value?.scrollTop ?? 0);
+      const within = (viewport.value?.scrollTop ?? 0) - offsets.value[index];
+      ratios.value[number - 1] = size.height / size.width;
+      await nextTick();
+      if (viewport.value) viewport.value.scrollTop = offsets.value[index] + within;
+      scrollTop.value = viewport.value?.scrollTop ?? 0;
+      if (number % 8 === 0) await yieldToBrowser();
+    } catch (reason) { if (!stopped) failed(reason as Error); return; }
+  }
+}
 function resized() {
   const value = Math.floor(viewport.value?.clientWidth ?? 0);
   if (value > 0) width.value = value;
+  height.value = viewport.value?.clientHeight || 600;
 }
 onMounted(() => {
   resized();
@@ -86,6 +137,7 @@ onActivated(async () => {
   await nextTick(); resized();
   viewport.value?.scrollTo({ top: position.top, left: position.left });
 });
+defineExpose({ selectPage });
 onDeactivated(savePosition);
 onBeforeUnmount(() => { stopped = true; savePosition(); observer?.disconnect(); });
 </script>
@@ -107,7 +159,12 @@ onBeforeUnmount(() => { stopped = true; savePosition(); observer?.disconnect(); 
       <PdfThumbnails v-if="thumbnails && document && !error" :document="document" :page="page" @select="selectPage" />
       <div class="pdf-main-pane">
         <div ref="viewport" class="pdf-viewport custom-scroll" :aria-busy="loading" @scroll.passive="scrolled">
-          <VuePdfEmbed v-if="width && !error" :source="source" :page="page" :width="pageWidth" text-layer annotation-layer class="pdf-page" @loaded="loaded" @progress="progress = $event.total ? Math.min(100, Math.round($event.loaded / $event.total * 100)) : 0" @rendered="rendered" @loading-failed="failed" @rendering-failed="failed" @password-requested="loading = false; error = '此文件需要密码，请使用浏览器打开'" @internal-link-clicked="selectPage" />
+
+          <div v-if="document && !error" class="pdf-continuous-pages" :style="{ height: `${offsets[pages]}px`, minWidth: `${pageWidth}px` }">
+            <div v-for="number in visiblePages" :key="number" class="pdf-page-slot" :style="{ top: `${offsets[number - 1]}px`, height: `${offsets[number] - offsets[number - 1] - 16}px` }">
+              <VuePdfEmbed :source="document" :page="number" :width="pageWidth" text-layer annotation-layer class="pdf-page" @rendered="rendered(number)" @rendering-failed="failed" @internal-link-clicked="selectPage" />
+            </div>
+          </div>
         </div>
         <div v-if="error" class="pdf-status-overlay file-error" role="alert"><span>{{ error }}，可点击“浏览器打开”或下载查看。</span></div>
         <div v-else-if="loading" class="pdf-status-overlay pdf-page-loading preview-loading" role="status"><LoaderCircle :size="22" class="spin" /><span>{{ pages ? '正在渲染页面…' : `正在加载 PDF${progress ? `（${progress}%）` : ''}…` }}</span></div>
