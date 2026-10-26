@@ -42,7 +42,7 @@ let cancelled = false;
 let wordController: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saveChain: Promise<unknown> = Promise.resolve();
-const pdfReader = ref<{ selectPage: (page: number) => void; extractText: (progress: (value: number) => void) => Promise<PdfTextPage[]> }>();
+const pdfReader = ref<{ selectPage: (page: number) => void; pageImage: (page: number) => Promise<string>; bookmarks: () => Promise<PdfOutlineEntry[]>; extractText: (progress: (value: number) => void) => Promise<PdfTextPage[]> }>();
 const pdfPageCount = ref(0);
 const pdfEntries = ref<PdfOutlineEntry[]>([]);
 async function extractPdfText(progress: (value: number) => void) {
@@ -159,7 +159,7 @@ onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(obj
 <template>
   <div ref="documentEl" class="document-view" :class="{ 'file-document': item.kind === 'pdf' || item.kind === 'word', 'markdown-editing': item.kind === 'markdown' && editing }">
     <Teleport v-if="item.kind === 'pdf'" to="#pdf-outline-actions" defer>
-      <PdfOutlinePanel v-if="active" :item-id="item.id" :page-count="pdfPageCount" :extract="extractPdfText" @outline="pdfEntries = $event" />
+      <PdfOutlinePanel v-if="active" :item-id="item.id" :page-count="pdfPageCount" :extract="extractPdfText" :image="number => pdfReader!.pageImage(number)" :bookmarks="() => pdfReader!.bookmarks()" @outline="pdfEntries = $event" />
     </Teleport>
     <Teleport to="#document-actions" defer>
       <div v-if="active" class="document-actions-content">

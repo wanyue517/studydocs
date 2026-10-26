@@ -2,12 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { PdfOutlineEntry, PdfOutlineState, PdfTextPage } from '@studydocs/shared';
 import { api } from '../lib/api';
+import PdfTocDialog from './PdfTocDialog.vue';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Message from 'primevue/message';
-const props = defineProps<{ itemId: string; pageCount: number; extract: (progress: (value: number) => void) => Promise<PdfTextPage[]> }>();
+const props = defineProps<{ itemId: string; pageCount: number; image: (page: number) => Promise<string>; bookmarks: () => Promise<PdfOutlineEntry[]>; extract: (progress: (value: number) => void) => Promise<PdfTextPage[]> }>();
 const emit = defineEmits<{ outline: [entries: PdfOutlineEntry[]] }>();
 const state = ref<PdfOutlineState>({ entries: [], pageCount: 0, updatedAt: null, job: null });
 const loading = ref(true);
@@ -16,6 +17,7 @@ const extractionProgress = ref(0);
 const saving = ref(false);
 const error = ref('');
 const promptOpen = ref(false);
+const tocOpen = ref(false);
 const editorOpen = ref(false);
 const draft = ref<PdfOutlineEntry[]>([]);
 const editorError = ref('');
@@ -44,6 +46,19 @@ async function refresh() {
 }
 onMounted(() => { void refresh(); });
 onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
+function previewToc(entries: PdfOutlineEntry[]) {
+  tocOpen.value = false; draft.value = entries;
+  editedAt = state.value.updatedAt; editorError.value = ''; editorOpen.value = true;
+}
+async function importBookmarks() {
+  extracting.value = true; error.value = '';
+  try {
+    const entries = await props.bookmarks();
+    if (!entries.length) throw new Error('此 PDF 没有嵌入书签，请选择目录页识别');
+    previewToc(entries);
+  } catch (e) { error.value = (e as Error).message; }
+  finally { extracting.value = false; }
+}
 async function prepare() {
   error.value = '';
   try {
@@ -94,6 +109,8 @@ async function save() {
     <p v-if="loading" role="status">正在读取目录…</p>
     <template v-else>
       <div class="pdf-outline-buttons">
+        <Button size="small" text label="导入原生书签" :disabled="busy || !pageCount" @click="importBookmarks" />
+        <Button size="small" text label="从目录页生成（推荐）" :disabled="busy || !pageCount" @click="tocOpen = true" />
         <Button size="small" text :label="state.entries.length ? '重新生成目录' : '手动生成目录'" :disabled="busy || !pageCount" @click="prepare" />
         <Button v-if="state.job?.status === 'failed'" size="small" label="继续生成" :disabled="busy" @click="resume" />
         <Button size="small" text label="编辑目录" :disabled="busy || !pageCount" @click="edit" />
@@ -105,6 +122,7 @@ async function save() {
       <p v-if="error" class="field-error" role="alert">{{ error }} <Button text size="small" label="重新读取" @click="refresh" /></p>
       <p v-else-if="state.job?.status === 'failed'" class="field-error" role="alert">{{ state.job.error }}。已完成 {{ state.job.progress }}%，已缓存的批次不会重复请求；继续时失败批次可能再次计费。</p>
     </template>
+    <PdfTocDialog v-if="tocOpen" :item-id="itemId" :page-count="pageCount" :image="image" @close="tocOpen = false" @preview="previewToc" />
     <Dialog v-model:visible="promptOpen" modal :draggable="false" header="生成 PDF 目录" class="study-dialog" :style="{ width: 'min(480px, calc(100vw - 32px))' }">
       <p>将提取 PDF 每页的部分文字，发送给“{{ availability.name }} / {{ availability.model }}”生成目录，可能产生模型调用费用。扫描件请先进行 OCR，或手动编辑目录。</p>
       <p>每批完成立即保存，失败后可继续生成；相同内容和模型会复用缓存。为避免重复计费，失败后暂停，需点击继续。</p>

@@ -11,7 +11,7 @@ const { StorageService } = require('../dist/storage.service');
 const { AuthService } = require('../dist/auth');
 const { DocumentsService } = require('../dist/documents.service');
 const { AiService } = require('../dist/ai.service');
-const { PdfOutlineService } = require('../dist/pdf-outline.service');
+const { PdfOutlineService, parseTocText } = require('../dist/pdf-outline.service');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 (async () => {
   const database = new DatabaseService(); const originalFetch = global.fetch;
@@ -100,8 +100,31 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     assert.throws(() => outlines.start(owner, pdf.id, { pages: [{ page: 1, text: '' }], pageCount: 1 }), /OCR/);
     modelResponse = 'http-error';
     await assert.rejects(() => ai.chat(ai.connection(), 'test', 'test'), error => /API Key 无效/.test(error.message) && !error.message.includes('SECRET'));
+    assert.deepEqual(parseTocText('Chapter One ........ 12\n1.2 Details      15\nordinary text\nAppendix .... 23'), [
+      { title: 'Chapter One', level: 1, page: 12 }, { title: '1.2 Details', level: 2, page: 15 }, { title: 'Appendix', level: 1, page: 23 }
+    ]);
+    const imageInput = { image: 'data:image/jpeg;base64,/9j/AAAA', engine: 'vision', language: 'eng' };
+    let visionCalls = 0;
+    ai.chat = async (_connection, _system, content) => {
+      visionCalls++; assert.ok(Array.isArray(content));
+      assert.equal(content[1].image_url.url, imageInput.image);
+      return JSON.stringify({ entries: [{ title: 'Scanned chapter', page: 12, level: 1 }] });
+    };
+    await assert.rejects(() => outlines.recognize(member.id, pdf.id, imageInput), /不存在/);
+    const recognized = await outlines.recognize(owner, pdf.id, imageInput);
+    assert.equal(recognized.cached, false); assert.equal(recognized.entries[0].page, 12);
+    const recovered = new PdfOutlineService(database, docs, ai);
+    assert.equal((await recovered.recognize(owner, pdf.id, imageInput)).cached, true);
+    assert.equal(visionCalls, 1, '目录页识别缓存跨服务实例复用');
+    ai.chat = async () => '{invalid';
+    await assert.rejects(() => outlines.recognize(owner, pdf.id, { ...imageInput, image: imageInput.image + 'AA' }), /有效目录/);
+    if (process.env.OCR_TEST_IMAGE) {
+      const result = await outlines.recognize(owner, pdf.id, { image: 'data:image/jpeg;base64,' + readFileSync(process.env.OCR_TEST_IMAGE).toString('base64'), engine: 'local', language: 'eng' });
+      assert.ok(result.entries.some(e => e.page === 12 && e.title.includes('Chapter')));
+    }
     docs.trash(owner, pdf.id); await docs.removeForever(owner, pdf.id);
     assert.equal(database.db.prepare('SELECT COUNT(*) n FROM pdf_outlines').get().n, 0);
+    assert.equal(database.db.prepare('SELECT COUNT(*) n FROM pdf_toc_recognition').get().n, 0);
     console.log('✓ PDF AI: 加密配置 / 密钥保留 / 分批生成 / 页码验证 / 用户隔离 / 失败保留 / 目录持久化 / 编辑冲突 / 扫描件 / 删除清理');
   } finally { global.fetch = originalFetch; database.onModuleDestroy(); rmSync(dir, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

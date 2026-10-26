@@ -52,6 +52,18 @@ const { DocumentsService } = require('../dist/documents.service');
       if (state.job.status !== 'running') break;
     }
     assert.equal(state.job.status, 'completed'); assert.equal(state.entries.length, 20);
+    const scanInput = { image: 'data:image/jpeg;base64,/9j/AAAA', engine: 'vision', language: 'eng' };
+    assert.equal((await request(`/items/${file.id}/pdf-outline/recognize-page`, 'POST', scanInput, memberCookie)).status, 404);
+    assert.equal((await request(`/items/${file.id}/pdf-outline/recognize-page`, 'POST', { ...scanInput, image: 'invalid' }, adminCookie)).status, 400);
+    app.get(AiService).chat = async (_connection, _system, content) => {
+      assert.ok(Array.isArray(content));
+      return JSON.stringify({ entries: [{ title: 'Scanned heading', level: 1, page: 12 }] });
+    };
+    const scan = await request(`/items/${file.id}/pdf-outline/recognize-page`, 'POST', scanInput, adminCookie);
+    assert.equal(scan.status, 201);
+    assert.equal((await scan.json()).entries[0].page, 12);
+    const cachedScan = await request(`/items/${file.id}/pdf-outline/recognize-page`, 'POST', scanInput, adminCookie);
+    assert.equal((await cachedScan.json()).cached, true);
     console.log('✓ PDF HTTP: 身份校验 / 管理员限制 / 密钥不回显 / 所有者隔离 / 大文本请求 / 生成任务与目录查询');
   } finally { await app.close(); rmSync(dir, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

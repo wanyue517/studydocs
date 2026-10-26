@@ -8,6 +8,7 @@ export class PdfOutlineController {
   constructor(private readonly outlines: PdfOutlineService) {}
   @Get() get(@CurrentUser() user: User, @Param('id') id: string) { return this.outlines.get(user.id, id); }
   @Post('generate') generate(@CurrentUser() user: User, @Param('id') id: string, @Body() input: { pages: PdfTextPage[]; pageCount: number }) { return this.outlines.start(user.id, id, input); }
+  @Post('recognize-page') recognize(@CurrentUser() user: User, @Param('id') id: string, @Body() input: { image: string; engine: 'local' | 'vision'; language: string }) { return this.outlines.recognize(user.id, id, input); }
   @Post('resume') resume(@CurrentUser() user: User, @Param('id') id: string) { return this.outlines.resume(user.id, id); }
   @Patch() save(@CurrentUser() user: User, @Param('id') id: string, @Body() input: { entries: unknown; pageCount: number; updatedAt: string | null }) { return this.outlines.save(user.id, id, input); }
 }

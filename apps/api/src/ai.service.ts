@@ -82,7 +82,7 @@ export class AiService {
     const row = this.database.db.prepare('SELECT * FROM ai_profiles WHERE active=1').get() as Row | undefined;
     return { configured: !!row, name: row?.name ?? '', model: row?.model ?? '' };
   }
-  async chat(connection: AiConnection, system: string, content: string): Promise<string> {
+  async chat(connection: AiConnection, system: string, content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): Promise<string> {
     const url = connection.baseUrl.replace(/\/+$/, '');
     let response: globalThis.Response;
     const controller = new AbortController();

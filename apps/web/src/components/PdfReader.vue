@@ -159,7 +159,37 @@ async function extractText(onProgress: (value: number) => void): Promise<PdfText
   }
   return result;
 }
-defineExpose({ selectPage, extractText });
+async function pageImage(number: number) {
+  const doc = document.value;
+  if (!doc) throw new Error('PDF 尚未加载');
+  const pdfPage = await doc.getPage(number);
+  const original = pdfPage.getViewport({ scale: 1 });
+  const view = pdfPage.getViewport({ scale: Math.min(2, 1800 / Math.max(original.width, original.height)) });
+  const canvas = window.document.createElement('canvas');
+  canvas.width = Math.ceil(view.width); canvas.height = Math.ceil(view.height);
+  try {
+    await pdfPage.render({ canvas, viewport: view }).promise;
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } finally { canvas.width = canvas.height = 0; }
+}
+async function bookmarks(): Promise<import('@studydocs/shared').PdfOutlineEntry[]> {
+  const doc = document.value;
+  if (!doc) throw new Error('PDF 尚未加载');
+  const result: import('@studydocs/shared').PdfOutlineEntry[] = [];
+  const walk = async (nodes: NonNullable<Awaited<ReturnType<typeof doc.getOutline>>>, level: number) => {
+    for (const node of nodes) {
+      const dest = typeof node.dest === 'string' ? await doc.getDestination(node.dest) : node.dest;
+      if (dest?.length) {
+        const page = typeof dest[0] === 'number' ? dest[0] + 1 : await doc.getPageIndex(dest[0]) + 1;
+        result.push({ title: node.title.slice(0, 200), level: Math.min(6, level), page });
+      }
+      await walk(node.items, level + 1);
+    }
+  };
+  await walk(await doc.getOutline() ?? [], 1);
+  return result;
+}
+defineExpose({ selectPage, extractText, pageImage, bookmarks });
 onDeactivated(savePosition);
 onBeforeUnmount(() => { stopped = true; savePosition(); observer?.disconnect(); });
 </script>
