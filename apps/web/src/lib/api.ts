@@ -31,6 +31,7 @@ export const api = {
   removeAi: (id: string) => request<{ success: boolean }>(`/ai/profiles/${id}`, { method: 'DELETE' }),
   aiAvailability: () => request<{ configured: boolean; name: string; model: string }>('/ai/availability'),
   pdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline`),
+  resumePdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline/resume`, { method: 'POST' }),
   generatePdfOutline: (id: string, pages: PdfTextPage[], pageCount: number) => request<PdfOutlineState>(`/items/${id}/pdf-outline/generate`, { method: 'POST', body: JSON.stringify({ pages, pageCount }) }),
   savePdfOutline: (id: string, entries: PdfOutlineEntry[], pageCount: number, updatedAt: string | null) => request<PdfOutlineState>(`/items/${id}/pdf-outline`, { method: 'PATCH', body: JSON.stringify({ entries, pageCount, updatedAt }) }),
   sitePublic: () => request<PublicSite>('/site/public'),

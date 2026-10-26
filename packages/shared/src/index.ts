@@ -47,4 +47,4 @@ export interface AiProfile extends Omit<AiProfileInput, 'apiKey'> { id: string; 
 export interface PdfOutlineEntry { title: string; level: number; page: number }
 export interface PdfTextPage { page: number; text: string }
 export interface PdfOutlineJob { id: string; status: 'running' | 'completed' | 'failed'; progress: number; error: string; model: string }
-export interface PdfOutlineState { entries: PdfOutlineEntry[]; pageCount: number; updatedAt: string | null; job: PdfOutlineJob | null }
+export interface PdfOutlineState { partialEntries?: PdfOutlineEntry[]; entries: PdfOutlineEntry[]; pageCount: number; updatedAt: string | null; job: PdfOutlineJob | null }

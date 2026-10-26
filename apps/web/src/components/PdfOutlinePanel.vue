@@ -23,7 +23,7 @@ const availability = ref({ configured: false, name: '', model: '' });
 const busy = computed(() => extracting.value || state.value.job?.status === 'running');
 let disposed = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-function apply(value: PdfOutlineState) { state.value = value; emit('outline', value.entries); }
+function apply(value: PdfOutlineState) { state.value = value; emit('outline', value.entries.length ? value.entries : value.partialEntries ?? []); }
 function schedule() {
   if (disposed || state.value.job?.status !== 'running') return;
   timer = setTimeout(() => { void refresh(); }, 2000);
@@ -66,6 +66,12 @@ async function generate() {
   } catch (e) { if (!disposed) error.value = (e as Error).message; }
   finally { extracting.value = false; }
 }
+async function resume() {
+  extracting.value = true; error.value = '';
+  try { apply(await api.resumePdfOutline(props.itemId)); schedule(); }
+  catch (e) { error.value = (e as Error).message; }
+  finally { extracting.value = false; }
+}
 let editedAt: string | null = null;
 function edit() {
   draft.value = state.value.entries.map(entry => ({ ...entry }));
@@ -89,16 +95,19 @@ async function save() {
     <template v-else>
       <div class="pdf-outline-buttons">
         <Button size="small" text :label="state.entries.length ? '重新生成目录' : '手动生成目录'" :disabled="busy || !pageCount" @click="prepare" />
+        <Button v-if="state.job?.status === 'failed'" size="small" label="继续生成" :disabled="busy" @click="resume" />
         <Button size="small" text label="编辑目录" :disabled="busy || !pageCount" @click="edit" />
       </div>
       <p v-if="extracting" role="status">正在提取 PDF 文字 {{ extractionProgress }}%</p>
       <p v-else-if="state.job?.status === 'running'" role="status">AI 正在生成目录 {{ state.job.progress }}%（{{ state.job.model }}）</p>
-      <p v-else-if="!state.entries.length">点击生成层级目录，或手动添加标题与跳转页码。保存后再次打开仍可使用。</p>
+      <p v-if="state.partialEntries?.length && state.job?.status !== 'completed'">已缓存 {{ state.partialEntries.length }} 个目录项。{{ state.entries.length ? '当前保留原目录，全部完成后替换。' : '已完成部分可点击阅读。' }}</p>
+      <p v-if="!state.entries.length && !busy">点击生成层级目录，或手动添加标题与跳转页码。保存后再次打开仍可使用。</p>
       <p v-if="error" class="field-error" role="alert">{{ error }} <Button text size="small" label="重新读取" @click="refresh" /></p>
-      <p v-else-if="state.job?.status === 'failed'" class="field-error" role="alert">{{ state.job.error }}</p>
+      <p v-else-if="state.job?.status === 'failed'" class="field-error" role="alert">{{ state.job.error }}。已完成 {{ state.job.progress }}%，已缓存的批次不会重复请求；继续时失败批次可能再次计费。</p>
     </template>
     <Dialog v-model:visible="promptOpen" modal :draggable="false" header="生成 PDF 目录" class="study-dialog" :style="{ width: 'min(480px, calc(100vw - 32px))' }">
       <p>将提取 PDF 每页的部分文字，发送给“{{ availability.name }} / {{ availability.model }}”生成目录，可能产生模型调用费用。扫描件请先进行 OCR，或手动编辑目录。</p>
+      <p>每批完成立即保存，失败后可继续生成；相同内容和模型会复用缓存。为避免重复计费，失败后暂停，需点击继续。</p>
       <p v-if="state.entries.length">生成成功后替换现有目录；生成失败将保留现有目录。</p>
       <template #footer><Button label="取消" severity="secondary" outlined @click="promptOpen = false" /><Button label="开始生成" @click="generate" /></template>
     </Dialog>
