@@ -49,3 +49,5 @@ export interface PdfTextPage { page: number; text: string }
 export interface PdfOutlineJob { id: string; status: 'running' | 'completed' | 'failed'; progress: number; error: string; model: string }
 export interface PdfOutlineDraft { entries: PdfOutlineEntry[]; baseUpdatedAt: string | null; updatedAt: string }
 export interface PdfOutlineState { draft?: PdfOutlineDraft | null; partialEntries?: PdfOutlineEntry[]; entries: PdfOutlineEntry[]; pageCount: number; updatedAt: string | null; job: PdfOutlineJob | null }
+
+export interface PdfLayoutJob { forceOcr: boolean; id: string; status: 'running' | 'completed' | 'failed'; progress: number; pageCount: number; message: string; error: string; entries: PdfOutlineEntry[] }

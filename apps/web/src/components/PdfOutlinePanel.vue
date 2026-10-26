@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { PdfOutlineEntry, PdfOutlineState, PdfTextPage } from '@studydocs/shared';
+import type { PdfOutlineEntry, PdfOutlineState, PdfTextPage, PdfLayoutJob } from '@studydocs/shared';
 import { api } from '../lib/api';
 import PdfTocDialog from './PdfTocDialog.vue';
 import Button from 'primevue/button';
@@ -18,6 +18,28 @@ const saving = ref(false);
 const error = ref('');
 const promptOpen = ref(false);
 const tocOpen = ref(false);
+const layoutJob = ref<PdfLayoutJob | null>(null);
+const layoutOpen = ref(false), layoutForce = ref(false), layoutSubmitting = ref(false);
+const layoutError = ref('');
+let layoutTimer: ReturnType<typeof setTimeout> | undefined;
+async function refreshLayout() {
+  if (layoutTimer) clearTimeout(layoutTimer);
+  try { const result = await api.pdfLayout(props.itemId); if (!disposed) { layoutJob.value = result; layoutError.value = ''; } }
+  catch (e) { if (!disposed) layoutError.value = (e as Error).message; }
+  if (!disposed && layoutJob.value?.status === 'running') layoutTimer = setTimeout(() => { void refreshLayout(); }, 2500);
+}
+async function startLayout() {
+  layoutSubmitting.value = true; layoutError.value = ''; layoutOpen.value = false;
+  try {
+    if (!layoutForce.value) {
+      const bookmarks = await props.bookmarks();
+      if (bookmarks.length) { previewToc(bookmarks); return; }
+    }
+    layoutJob.value = await api.startPdfLayout(props.itemId, layoutForce.value);
+    void refreshLayout();
+  } catch (e) { layoutError.value = (e as Error).message; }
+  finally { layoutSubmitting.value = false; }
+}
 const bodyOpen = ref(false);
 const bodyStart = ref(1), bodyEnd = ref(props.pageCount), language = ref('chi_sim+eng');
 const forceOcr = ref(false);
@@ -32,7 +54,7 @@ const editorOpen = ref(false);
 const draft = ref<PdfOutlineEntry[]>([]);
 const editorError = ref('');
 const availability = ref({ configured: false, name: '', model: '' });
-const busy = computed(() => extracting.value || state.value.job?.status === 'running');
+const busy = computed(() => extracting.value || layoutSubmitting.value || layoutJob.value?.status === 'running' || state.value.job?.status === 'running');
 let disposed = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 function apply(value: PdfOutlineState) { state.value = value; emit('outline', value.entries.length ? value.entries : value.partialEntries ?? []); }
@@ -54,8 +76,8 @@ async function refresh() {
     if (state.value.job?.status === 'running') timer = setTimeout(() => { void refresh(); }, 5000);
   } finally { loading.value = false; }
 }
-onMounted(() => { void refresh(); });
-onBeforeUnmount(() => { disposed = true; cancelled.value = true; if (timer) clearTimeout(timer); if (draftTimer) { clearTimeout(draftTimer); void persistDraft(); } });
+onMounted(() => { void refresh(); void refreshLayout(); });
+onBeforeUnmount(() => { disposed = true; if (layoutTimer) clearTimeout(layoutTimer); cancelled.value = true; if (timer) clearTimeout(timer); if (draftTimer) { clearTimeout(draftTimer); void persistDraft(); } });
 function previewToc(entries: PdfOutlineEntry[]) {
   tocOpen.value = false;
   const existing = state.value.draft?.entries ?? [];
@@ -190,12 +212,19 @@ async function save() {
     <p v-if="loading" role="status">正在读取目录…</p>
     <template v-else>
       <div class="pdf-outline-buttons">
+        <Button size="small" label="智能版面解析（推荐）" :disabled="busy || !pageCount" @click="layoutOpen = true" />
         <Button size="small" label="从正文提取（无需 AI）" :disabled="busy || !pageCount" @click="bodyEnd = pageCount; bodyOpen = true" />
         <Button size="small" text label="导入原生书签" :disabled="busy || !pageCount" @click="importBookmarks" />
         <Button size="small" text label="从目录页生成" :disabled="busy || !pageCount" @click="tocOpen = true" />
         <Button size="small" text label="AI 生成（可选）" :disabled="busy || !pageCount" @click="prepare" />
         <Button v-if="state.job?.status === 'failed'" size="small" label="继续生成" :disabled="busy" @click="resume" />
         <Button size="small" text :label="state.draft ? '继续编辑草稿' : '编辑目录'" :disabled="busy || !pageCount" @click="edit" />
+      </div>
+      <p v-if="layoutJob" role="status">Docling {{ layoutJob.progress }}%：{{ layoutJob.message }}</p>
+      <p v-if="layoutError || layoutJob?.error" class="field-error" role="alert">{{ layoutError || layoutJob?.error }}</p>
+      <div v-if="layoutJob && layoutJob.status !== 'running'" class="pdf-outline-buttons">
+        <Button v-if="layoutJob.status === 'failed'" size="small" text label="继续版面解析（复用缓存）" :disabled="busy" @click="layoutForce = layoutJob.forceOcr; layoutOpen = true" />
+        <Button v-if="layoutJob.entries.length" size="small" text :label="`预览识别结果（${layoutJob.entries.length} 项）`" :disabled="busy" @click="previewToc(layoutJob.entries)" />
       </div>
       <p v-if="extracting" role="status">{{ bodyStatus || '正在准备文档' }} {{ extractionProgress }}% <Button text size="small" label="停止" @click="cancelled = true" /></p>
       <p v-else-if="state.job?.status === 'running'" role="status">AI 正在生成目录 {{ state.job.progress }}%（{{ state.job.model }}）</p>
@@ -204,6 +233,15 @@ async function save() {
       <p v-if="error" class="field-error" role="alert">{{ error }} <Button text size="small" label="重新读取" @click="refresh" /></p>
       <p v-else-if="state.job?.status === 'failed'" class="field-error" role="alert">{{ state.job.error }}。已完成 {{ state.job.progress }}%，已缓存的批次不会重复请求；继续时失败批次可能再次计费。</p>
     </template>
+    <Dialog v-model:visible="layoutOpen" modal header="智能版面解析 · Docling" :style="{ width: 'min(540px, calc(100vw - 24px))' }">
+      <div class="pdf-outline-editor">
+        <p>优先读取原生书签；没有书签时，使用本地版面模型与 RapidOCR 识别标题区域、章节编号、字体样式和层级。支持文字、扫描及混合 PDF，不消耗在线模型 token。</p>
+        <p>后台解析，关闭页面不影响任务。每 12 页保存结构化缓存，失败后可继续。结果先进入预览编辑，不覆盖正式目录或已有草稿。</p>
+        <label><input v-model="layoutForce" type="checkbox" />强制 OCR（文字层乱码时启用；正常文件保持关闭）</label>
+        <p>需先部署 Docling Python 环境及模型。首次加载较慢，暂支持最大 100MB、2000 页；扫描质量及复杂排版仍可能影响结果。</p>
+      </div>
+      <template #footer><Button label="开始解析 / 继续" @click="startLayout" /></template>
+    </Dialog>
     <Dialog v-model:visible="bodyOpen" modal header="从正文提取编号标题" :style="{ width: 'min(520px, calc(100vw - 24px))' }">
       <div class="pdf-outline-editor">
         <p>识别 1、1.1、1.1.1、第一章等标题；直接使用 PDF 实际页码。识别结果先保存为草稿，确认后才替换正式目录。</p>

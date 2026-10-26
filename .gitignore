@@ -6,3 +6,5 @@ dist/
 apps/api/data/
 apps/api/uploads/
 apps/web/dist/
+.venv-docling/
+__pycache__/

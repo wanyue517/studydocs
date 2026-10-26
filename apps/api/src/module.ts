@@ -1,3 +1,4 @@
+import { PdfLayoutService } from './pdf-layout.service';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { PdfOutlineController } from './pdf-outline.controller';
@@ -14,6 +15,6 @@ import { StorageService } from './storage.service';
 import { TransferService } from './transfer.service';
 @Module({
   controllers:[AiController, PdfOutlineController, AuthController, DocumentsController, SiteController, StorageController],
-  providers:[AiService, PdfOutlineService, DatabaseService, SiteService, StorageService, AuthService, DocumentsService, TransferService, {provide:APP_GUARD,useClass:AuthGuard}],
+  providers:[PdfLayoutService, AiService, PdfOutlineService, DatabaseService, SiteService, StorageService, AuthService, DocumentsService, TransferService, {provide:APP_GUARD,useClass:AuthGuard}],
 })
 export class AppModule {}

@@ -1,4 +1,4 @@
-import type { KnowledgeItem, CreateItemInput, PatchItemInput, AiProfile, AiProfileInput, PdfOutlineState, PdfOutlineEntry, PdfTextPage, PdfOutlineDraft } from '@studydocs/shared';
+import type { KnowledgeItem, CreateItemInput, PatchItemInput, AiProfile, AiProfileInput, PdfOutlineState, PdfOutlineEntry, PdfTextPage, PdfOutlineDraft, PdfLayoutJob } from '@studydocs/shared';
 import { hashChunk, yieldToBrowser } from './transfer-work';
 
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
@@ -32,6 +32,8 @@ export const api = {
   aiAvailability: () => request<{ configured: boolean; name: string; model: string }>('/ai/availability'),
   pdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline`),
   recognizeTocPage: (id: string, image: string, engine: 'local' | 'vision', language: string) => request<{ entries: PdfOutlineEntry[]; cached: boolean }>(`/items/${id}/pdf-outline/recognize-page`, { method: 'POST', body: JSON.stringify({ image, engine, language }) }),
+  pdfLayout: (id: string) => request<{ job: PdfLayoutJob | null }>(`/items/${id}/pdf-outline/layout`).then(result => result.job),
+  startPdfLayout: (id: string, forceOcr: boolean) => request<PdfLayoutJob>(`/items/${id}/pdf-outline/layout`, { method: 'POST', body: JSON.stringify({ forceOcr }) }),
   bodyHeadings: (id: string, page: number, text: string, image: string | undefined, language: string) => request<{ entries: PdfOutlineEntry[] }>(`/items/${id}/pdf-outline/body-page`, { method: 'POST', body: JSON.stringify({ page, text, image, language }) }),
   saveOutlineDraft: (id: string, entries: PdfOutlineEntry[], baseUpdatedAt: string | null, updatedAt: string | null) => request<PdfOutlineDraft>(`/items/${id}/pdf-outline/draft`, { method: 'PATCH', body: JSON.stringify({ entries, baseUpdatedAt, updatedAt }) }),
   resumePdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline/resume`, { method: 'POST' }),
