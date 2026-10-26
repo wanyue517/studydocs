@@ -1,0 +1,57 @@
+const { strict: assert } = require('node:assert');
+const { mkdtempSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const dir = mkdtempSync(join(tmpdir(), 'studydocs-pdf-http-'));
+process.env.STORAGE_DIR = dir;
+process.env.ADMIN_USERNAME = 'studyadmin'; process.env.ADMIN_PASSWORD = 'InitialPassword123!';
+const { NestFactory } = require('@nestjs/core');
+const { ValidationPipe } = require('@nestjs/common');
+const { AppModule } = require('../dist/module');
+const { AiService } = require('../dist/ai.service');
+const { SiteService } = require('../dist/site.service');
+const { DatabaseService } = require('../dist/database.service');
+const { DocumentsService } = require('../dist/documents.service');
+(async () => {
+  const app = await NestFactory.create(AppModule, { logger: false });
+  try {
+    app.useBodyParser('json', { limit: '4mb' });
+    app.setGlobalPrefix('api');
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    await app.listen(0, '127.0.0.1');
+    const origin = await app.getUrl();
+    const request = (path, method = 'GET', data, cookie) => fetch(origin + '/api' + path, { method, headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+    assert.equal((await request('/ai/profiles')).status, 401);
+    const login = await request('/auth/login', 'POST', { username: 'studyadmin', password: 'InitialPassword123!' });
+    assert.equal(login.status, 201);
+    const adminCookie = login.headers.get('set-cookie').split(';')[0];
+    const owner = (await login.json()).id;
+    app.get(SiteService).patch({ allowRegistration: true });
+    await request('/auth/register', 'POST', { username: 'testmember', password: 'Password1234!' });
+    const memberLogin = await request('/auth/login', 'POST', { username: 'testmember', password: 'Password1234!' });
+    const memberCookie = memberLogin.headers.get('set-cookie').split(';')[0];
+    assert.equal((await request('/ai/profiles', 'GET', undefined, memberCookie)).status, 403);
+    const profileResponse = await request('/ai/profiles', 'POST', { name: 'mock', provider: 'compatible', baseUrl: 'https://example.com/v1', model: 'mock', apiKey: 'test-secret' }, adminCookie);
+    assert.equal(profileResponse.status, 201);
+    const profile = await profileResponse.json(); assert.equal(profile.apiKey, undefined);
+    assert.equal((await request(`/ai/profiles/${profile.id}/activate`, 'POST', undefined, adminCookie)).status, 201);
+    const list = await (await request('/ai/profiles', 'GET', undefined, adminCookie)).text(); assert.ok(!list.includes('test-secret'));
+    const file = await app.get(DocumentsService).upload(owner, { originalname: 'test.pdf', buffer: Buffer.from('%PDF-1.4\ntest'), size: 13 }, null);
+    assert.equal((await request(`/items/${file.id}/pdf-outline`, 'GET', undefined, memberCookie)).status, 404);
+    app.get(AiService).chat = async (_connection, _system, content) => {
+      const { pages } = JSON.parse(content);
+      return JSON.stringify({ entries: [{ title: 'Chapter', level: 1, page: pages[0].page }] });
+    };
+    const pages = Array.from({ length: 100 }, (_, i) => ({ page: i + 1, text: '测试文字'.repeat(300) }));
+    assert.ok(Buffer.byteLength(JSON.stringify({ pages, pageCount: 100 })) > 100 * 1024);
+    const start = await request(`/items/${file.id}/pdf-outline/generate`, 'POST', { pages, pageCount: 100 }, adminCookie);
+    assert.equal(start.status, 201, await start.text());
+    let state;
+    for (let n = 0; n < 30; n++) {
+      state = await (await request(`/items/${file.id}/pdf-outline`, 'GET', undefined, adminCookie)).json();
+      if (state.job.status !== 'running') break;
+    }
+    assert.equal(state.job.status, 'completed'); assert.equal(state.entries.length, 5);
+    console.log('✓ PDF HTTP: 身份校验 / 管理员限制 / 密钥不回显 / 所有者隔离 / 大文本请求 / 生成任务与目录查询');
+  } finally { await app.close(); rmSync(dir, { recursive: true, force: true }); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

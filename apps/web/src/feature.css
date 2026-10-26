@@ -204,3 +204,15 @@ body.resizing-panels iframe { pointer-events: none; }
 .pdf-bootstrap { position: absolute; visibility: hidden; pointer-events: none; }
 .pdf-continuous-pages { position: relative; width: 100%; }
 .pdf-page-slot { position: absolute; left: 0; right: 0; }
+.ai-config-form { display: flex; flex-direction: column; gap: 18px; }
+.ai-config-form label { display: flex; flex-direction: column; gap: 8px; color: var(--ink); font-size: 14px; }
+.ai-config-form small { color: var(--ink-soft); line-height: 1.6; }
+.ai-config-form .field-error { color: #b42318; }
+.pdf-outline-actions { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; font-size: 13px; }
+.pdf-outline-actions p { margin: 0; color: var(--ink-soft); line-height: 1.6; }
+.pdf-outline-actions .field-error { color: #b42318; overflow-wrap: anywhere; }
+.pdf-outline-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.pdf-outline-editor { display: flex; flex-direction: column; gap: 12px; }
+.pdf-outline-editor-row { display: grid; grid-template-columns: minmax(120px,1fr) 80px 80px 40px; gap: 8px; align-items: center; }
+.pdf-outline-editor-row .p-inputnumber-input { width: 100%; }
+.pdf-outline-editor-labels { font-size: 13px; color: var(--ink-soft); }

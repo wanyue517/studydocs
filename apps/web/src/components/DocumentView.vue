@@ -7,6 +7,8 @@ import { ExternalLink, FileDown, FileWarning, Globe2, PencilLine, Eye, Check, Lo
 import type { KnowledgeItem } from '@studydocs/shared';
 import { api } from '../lib/api';
 import { useKnowledgeStore } from '../stores/knowledge';
+import PdfOutlinePanel from './PdfOutlinePanel.vue';
+import type { PdfOutlineEntry, PdfTextPage } from '@studydocs/shared';
 import RichTextEditor from './RichTextEditor.vue';
 const PdfReader = defineAsyncComponent({
   loader: () => import('./PdfReader.vue'),
@@ -40,6 +42,13 @@ let cancelled = false;
 let wordController: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saveChain: Promise<unknown> = Promise.resolve();
+const pdfReader = ref<{ selectPage: (page: number) => void; extractText: (progress: (value: number) => void) => Promise<PdfTextPage[]> }>();
+const pdfPageCount = ref(0);
+const pdfEntries = ref<PdfOutlineEntry[]>([]);
+async function extractPdfText(progress: (value: number) => void) {
+  if (!pdfReader.value) throw new Error('PDF 尚未加载完成');
+  return pdfReader.value.extractText(progress);
+}
 const editable = computed(() => props.item.kind === 'markdown' || props.item.kind === 'richtext');
 const markdownHeadings = ref<Heading[]>([]);
 function updateMarkdownCatalog(items: HeadList[]) {
@@ -49,6 +58,7 @@ function updateMarkdownCatalog(items: HeadList[]) {
   }));
 }
 const headings = computed<Heading[]>(() => {
+  if (props.item.kind === 'pdf') return pdfEntries.value.map((entry, index) => ({ title: entry.title, level: entry.level, index }));
   if (props.item.kind === 'markdown') return markdownHeadings.value;
   if (props.item.kind === 'richtext') {
     const html = new DOMParser().parseFromString(draft.value, 'text/html');
@@ -82,6 +92,7 @@ function persist() {
 }
 function setEditing(value: boolean) { if (!value) { if (timer) clearTimeout(timer); void persist(); } editing.value = value; }
 function scrollToHeading(index: number) {
+  if (props.item.kind === 'pdf') { const entry = pdfEntries.value[index]; if (entry) pdfReader.value?.selectPage(entry.page); return; }
   const root = documentEl.value;
   const headings = root?.querySelectorAll<HTMLElement>('.article-inner :is(.md-editor-preview,.tiptap-editor) :is(h1,h2,h3,h4,h5,h6)');
   const heading = headings?.[index];
@@ -147,6 +158,9 @@ onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(obj
 </script>
 <template>
   <div ref="documentEl" class="document-view" :class="{ 'file-document': item.kind === 'pdf' || item.kind === 'word', 'markdown-editing': item.kind === 'markdown' && editing }">
+    <Teleport v-if="item.kind === 'pdf'" to="#pdf-outline-actions" defer>
+      <PdfOutlinePanel v-if="active" :item-id="item.id" :page-count="pdfPageCount" :extract="extractPdfText" @outline="pdfEntries = $event" />
+    </Teleport>
     <Teleport to="#document-actions" defer>
       <div v-if="active" class="document-actions-content">
         <span v-if="editable" class="save-state"><LoaderCircle v-if="saving || dirty" :size="14" class="spin" /><Check v-else :size="14" />{{ saving || dirty ? '保存中...' : '已自动保存' }}</span>
@@ -168,7 +182,7 @@ onBeforeUnmount(() => { cancelled = true; if (objectUrl) URL.revokeObjectURL(obj
     <div v-else-if="item.kind === 'pdf'" class="file-preview-area pdf-preview-area">
       <div v-if="fileError" class="file-error" role="alert"><FileWarning :size="18" />{{ fileError }}</div>
       <div v-else-if="!previewReady" class="preview-loading" role="status"><LoaderCircle :size="22" class="spin" />正在准备 PDF…</div>
-      <PdfReader v-else :source="fileUrl" :cache-key="cacheKey" :size="fileSize" :cached="fromCache" />
+      <PdfReader v-else ref="pdfReader" @ready="pdfPageCount = $event" :source="fileUrl" :cache-key="cacheKey" :size="fileSize" :cached="fromCache" />
     </div>
 
     <div v-else-if="item.kind === 'word'" class="file-preview-area">

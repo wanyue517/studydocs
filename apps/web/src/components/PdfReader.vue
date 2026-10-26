@@ -6,6 +6,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 import 'vue-pdf-embed/dist/styles/annotationLayer.css';
 import 'vue-pdf-embed/dist/styles/textLayer.css';
 import Button from 'primevue/button';
+import type { PdfTextPage } from '@studydocs/shared';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import PdfThumbnails from './PdfThumbnails.vue';
 import { ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, Minus, Plus, PanelLeft } from 'lucide-vue-next';
@@ -14,8 +15,9 @@ import { yieldToBrowser } from '../lib/transfer-work';
 import { pageAtOffset, pageOffsets } from '../lib/pdf-layout';
 
 const props = defineProps<{ source: string; cacheKey: string; size: number; cached: boolean }>();
+const emit = defineEmits<{ ready: [pageCount: number] }>();
 const positionKey = `studydocs-reader:${props.cacheKey}`;
-let position = { page: 1, zoom: 1, top: 0, left: 0, mode: 'reading', thumbnails: true };
+let position = { page: 1, zoom: 1, top: 0, offset: 0, left: 0, mode: 'reading', thumbnails: true };
 try { position = { ...position, ...JSON.parse(sessionStorage.getItem(positionKey) ?? '{}') }; } catch { /* Optional session state. */ }
 const viewport = ref<HTMLElement | null>(null);
 const page = ref(Math.max(1, Math.trunc(Number(position.page)) || 1));
@@ -43,7 +45,7 @@ let stopped = false;
 let positionTimer: ReturnType<typeof setTimeout> | undefined;
 function savePosition() {
   if (positionTimer) clearTimeout(positionTimer);
-  position = { mode: mode.value, thumbnails: thumbnails.value, page: page.value, zoom: zoom.value, top: viewport.value?.scrollTop ?? 0, left: viewport.value?.scrollLeft ?? 0 };
+  position = { mode: mode.value, thumbnails: thumbnails.value, page: page.value, zoom: zoom.value, top: viewport.value?.scrollTop ?? 0, offset: (viewport.value?.scrollTop ?? 0) - (offsets.value[page.value - 1] ?? 0), left: viewport.value?.scrollLeft ?? 0 };
   try { sessionStorage.setItem(positionKey, JSON.stringify(position)); } catch { /* Reading also works without storage. */ }
 }
 function scrolled() {
@@ -91,11 +93,13 @@ async function loaded(doc: PDFDocumentProxy) {
   ratios.value = Array(doc.numPages).fill(Math.SQRT2);
   page.value = Math.min(page.value, doc.numPages);
   const first = await doc.getPage(page.value);
+  if (stopped) return;
   const initial = first.getViewport({ scale: 1 });
   ratios.value[page.value - 1] = initial.height / initial.width;
   document.value = doc;
+  emit('ready', doc.numPages);
   await nextTick();
-  viewport.value?.scrollTo({ top: position.top || offsets.value[page.value - 1] || 0, left: position.left });
+  viewport.value?.scrollTo({ top: (offsets.value[page.value - 1] ?? 0) + (Number(position.offset) || 0), left: position.left });
   scrollTop.value = viewport.value?.scrollTop ?? 0;
   void measurePages(doc);
   if (props.cached || props.size > MAX_PREVIEW_BYTES) return;
@@ -137,7 +141,25 @@ onActivated(async () => {
   await nextTick(); resized();
   viewport.value?.scrollTo({ top: position.top, left: position.left });
 });
-defineExpose({ selectPage });
+async function extractText(onProgress: (value: number) => void): Promise<PdfTextPage[]> {
+  const doc = document.value;
+  if (!doc) throw new Error('PDF 尚未加载完成');
+  if (doc.numPages > 2000) throw new Error('暂支持最多 2000 页，请拆分文件后生成目录');
+  const limit = Math.min(1600, Math.floor(900000 / doc.numPages));
+  const result: PdfTextPage[] = [];
+  for (let number = 1; number <= doc.numPages; number++) {
+    if (stopped) throw new Error('已关闭 PDF，文字提取已停止');
+    const pdfPage = await doc.getPage(number);
+    const content = await pdfPage.getTextContent();
+    const text = content.items.map(item => 'str' in item ? item.str + (item.hasEOL ? '\n' : ' ') : '').join('').trim();
+    const tail = Math.floor(limit / 5);
+    result.push({ page: number, text: text.length > limit ? text.slice(0, limit - tail - 1) + '\n' + text.slice(-tail) : text });
+    onProgress(Math.round(number / doc.numPages * 100));
+    await yieldToBrowser();
+  }
+  return result;
+}
+defineExpose({ selectPage, extractText });
 onDeactivated(savePosition);
 onBeforeUnmount(() => { stopped = true; savePosition(); observer?.disconnect(); });
 </script>

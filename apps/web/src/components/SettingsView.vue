@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AiSettings from './AiSettings.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { Database, ExternalLink, HardDrive, ImagePlus, LoaderCircle, ShieldCheck, Trash2 } from 'lucide-vue-next';
 import { api, type SiteSettings, type EditableSiteSettings, type StorageProfile, type StorageInput, type Provider } from '../lib/api';
@@ -18,10 +19,10 @@ import FileUpload from 'primevue/fileupload';
 const account = useAccountStore();
 const confirm = useConfirm();
 const tabOptions = computed(() => [
-  ...(account.user?.role === 'admin' ? [{ label: '网站设置', value: 'site' }, { label: '文件存储', value: 'storage' }] : []),
+  ...(account.user?.role === 'admin' ? [{ label: '网站设置', value: 'site' }, { label: '文件存储', value: 'storage' }, { label: 'AI 配置', value: 'ai' }] : []),
   { label: '账号安全', value: 'account' },
 ]);
-const tab = ref<'site'|'storage'|'account'>('site');
+const tab = ref<'site'|'storage'|'ai'|'account'>('site');
 const oldPassword = ref('');
 const newPassword = ref('');
 const site = ref<SiteSettings | null>(null);
@@ -140,6 +141,7 @@ async function remove(id:string) {
       <Message v-if="error" severity="error" class="settings-feedback">{{ error }}</Message>
       <Message v-if="message" severity="success" class="settings-feedback">{{ message }}</Message>
       <div v-if="loading && tab !== 'account'" class="preview-loading" role="status"><LoaderCircle :size="20" class="spin" />正在读取设置…</div>
+      <AiSettings v-if="tab==='ai' && account.user.role==='admin'" />
       <template v-if="tab==='account'">
         <form class="settings-card" @submit.prevent="savePassword">
           <div class="settings-card-title"><h2>修改登录密码</h2><p>当前账号：{{ account.user.username }}。修改后其他浏览器将需要重新登录。</p></div>

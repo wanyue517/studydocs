@@ -1,4 +1,4 @@
-import type { KnowledgeItem, CreateItemInput, PatchItemInput } from '@studydocs/shared';
+import type { KnowledgeItem, CreateItemInput, PatchItemInput, AiProfile, AiProfileInput, PdfOutlineState, PdfOutlineEntry, PdfTextPage } from '@studydocs/shared';
 import { hashChunk, yieldToBrowser } from './transfer-work';
 
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
@@ -24,6 +24,15 @@ export type Provider = 'local'|'r2'|'minio'|'qiniu'|'aliyun';
 export interface StorageProfile {id:string;name:string;provider:Provider;active:boolean;endpoint?:string;region?:string;bucket?:string;prefix?:string;accessKeyId?:string;forcePathStyle?:boolean;hasSecret:boolean;createdAt:string}
 export interface StorageInput {name:string;provider:Provider;endpoint:string;region:string;bucket:string;prefix:string;accessKeyId:string;secretAccessKey:string;forcePathStyle:boolean}
 export const api = {
+  aiProfiles: () => request<AiProfile[]>('/ai/profiles'),
+  saveAi: (data: AiProfileInput, id?: string) => request<AiProfile>(id ? `/ai/profiles/${id}` : '/ai/profiles', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(data) }),
+  activateAi: (id: string) => request<AiProfile[]>(`/ai/profiles/${id}/activate`, { method: 'POST' }),
+  testAi: (id: string) => request<{ message: string }>(`/ai/profiles/${id}/test`, { method: 'POST' }),
+  removeAi: (id: string) => request<{ success: boolean }>(`/ai/profiles/${id}`, { method: 'DELETE' }),
+  aiAvailability: () => request<{ configured: boolean; name: string; model: string }>('/ai/availability'),
+  pdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline`),
+  generatePdfOutline: (id: string, pages: PdfTextPage[], pageCount: number) => request<PdfOutlineState>(`/items/${id}/pdf-outline/generate`, { method: 'POST', body: JSON.stringify({ pages, pageCount }) }),
+  savePdfOutline: (id: string, entries: PdfOutlineEntry[], pageCount: number, updatedAt: string | null) => request<PdfOutlineState>(`/items/${id}/pdf-outline`, { method: 'PATCH', body: JSON.stringify({ entries, pageCount, updatedAt }) }),
   sitePublic: () => request<PublicSite>('/site/public'),
   me: () => request<Account>('/auth/me'),
   login: (username:string,password:string) => request<Account>('/auth/login',{method:'POST',body:JSON.stringify({username,password})}),

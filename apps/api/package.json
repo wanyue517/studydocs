@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "node test/smoke.cjs",
     "test:filename": "node --experimental-strip-types --test test/upload-filename.test.mjs",
-    "test:transfer": "node test/transfer.cjs && node test/transfer-http.cjs && node test/transfer-cloud.cjs && node test/signing.cjs"
+    "test:transfer": "node test/transfer.cjs && node test/transfer-http.cjs && node test/transfer-cloud.cjs && node test/signing.cjs",
+    "test:pdf-outline": "node test/pdf-outline.cjs && node test/pdf-outline-http.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.800.0",

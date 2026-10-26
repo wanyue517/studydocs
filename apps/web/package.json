@@ -8,7 +8,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
-    "test:outline": "node --experimental-strip-types --test test/outline.test.mjs"
+    "test:outline": "node --experimental-strip-types --test test/outline.test.mjs",
+    "test:pdf-layout": "node --experimental-strip-types --test test/pdf-layout.test.mjs"
   },
   "dependencies": {
     "@primeuix/themes": "1.2.5",

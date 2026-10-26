@@ -1,0 +1,121 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import type { PdfOutlineEntry, PdfOutlineState, PdfTextPage } from '@studydocs/shared';
+import { api } from '../lib/api';
+import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
+import InputText from 'primevue/inputtext';
+import InputNumber from 'primevue/inputnumber';
+import Message from 'primevue/message';
+const props = defineProps<{ itemId: string; pageCount: number; extract: (progress: (value: number) => void) => Promise<PdfTextPage[]> }>();
+const emit = defineEmits<{ outline: [entries: PdfOutlineEntry[]] }>();
+const state = ref<PdfOutlineState>({ entries: [], pageCount: 0, updatedAt: null, job: null });
+const loading = ref(true);
+const extracting = ref(false);
+const extractionProgress = ref(0);
+const saving = ref(false);
+const error = ref('');
+const promptOpen = ref(false);
+const editorOpen = ref(false);
+const draft = ref<PdfOutlineEntry[]>([]);
+const editorError = ref('');
+const availability = ref({ configured: false, name: '', model: '' });
+const busy = computed(() => extracting.value || state.value.job?.status === 'running');
+let disposed = false;
+let timer: ReturnType<typeof setTimeout> | undefined;
+function apply(value: PdfOutlineState) { state.value = value; emit('outline', value.entries); }
+function schedule() {
+  if (disposed || state.value.job?.status !== 'running') return;
+  timer = setTimeout(() => { void refresh(); }, 2000);
+}
+async function refresh() {
+  if (timer) clearTimeout(timer);
+  try {
+    const value = await api.pdfOutline(props.itemId);
+    if (disposed) return;
+    apply(value); error.value = '';
+    schedule();
+  } catch (e) {
+    if (disposed) return;
+    error.value = (e as Error).message;
+    // Keep observing an already submitted server task after a transient network error.
+    if (state.value.job?.status === 'running') timer = setTimeout(() => { void refresh(); }, 5000);
+  } finally { loading.value = false; }
+}
+onMounted(() => { void refresh(); });
+onBeforeUnmount(() => { disposed = true; if (timer) clearTimeout(timer); });
+async function prepare() {
+  error.value = '';
+  try {
+    availability.value = await api.aiAvailability();
+    if (!availability.value.configured) { error.value = '请联系管理员在设置 → AI 配置中添加模型并设为默认'; return; }
+    promptOpen.value = true;
+  } catch (e) { error.value = (e as Error).message; }
+}
+async function generate() {
+  promptOpen.value = false; extracting.value = true; extractionProgress.value = 0; error.value = '';
+  try {
+    const pages = await props.extract(value => {
+      if (disposed) throw new Error('已离开文档，文字提取已停止');
+      extractionProgress.value = value;
+    });
+    if (disposed) return;
+    const value = await api.generatePdfOutline(props.itemId, pages, props.pageCount);
+    if (disposed) return;
+    apply(value); schedule();
+  } catch (e) { if (!disposed) error.value = (e as Error).message; }
+  finally { extracting.value = false; }
+}
+let editedAt: string | null = null;
+function edit() {
+  draft.value = state.value.entries.map(entry => ({ ...entry }));
+  editedAt = state.value.updatedAt; editorError.value = ''; editorOpen.value = true;
+}
+async function save() {
+  editorError.value = '';
+  const count = props.pageCount || state.value.pageCount;
+  if (draft.value.some(entry => !entry.title.trim() || entry.title.length > 200 || !Number.isInteger(entry.page) || entry.page < 1 || entry.page > count || !Number.isInteger(entry.level) || entry.level < 1 || entry.level > 6)) {
+    editorError.value = `请填写有效标题、1～6 级层级及 1～${count} 的物理页码`; return;
+  }
+  saving.value = true;
+  try { apply(await api.savePdfOutline(props.itemId, draft.value, count, editedAt)); editorOpen.value = false; }
+  catch (e) { editorError.value = (e as Error).message; }
+  finally { saving.value = false; }
+}
+</script>
+<template>
+  <div class="pdf-outline-actions">
+    <p v-if="loading" role="status">正在读取目录…</p>
+    <template v-else>
+      <div class="pdf-outline-buttons">
+        <Button size="small" text :label="state.entries.length ? '重新生成目录' : '手动生成目录'" :disabled="busy || !pageCount" @click="prepare" />
+        <Button size="small" text label="编辑目录" :disabled="busy || !pageCount" @click="edit" />
+      </div>
+      <p v-if="extracting" role="status">正在提取 PDF 文字 {{ extractionProgress }}%</p>
+      <p v-else-if="state.job?.status === 'running'" role="status">AI 正在生成目录 {{ state.job.progress }}%（{{ state.job.model }}）</p>
+      <p v-else-if="!state.entries.length">点击生成层级目录，或手动添加标题与跳转页码。保存后再次打开仍可使用。</p>
+      <p v-if="error" class="field-error" role="alert">{{ error }} <Button text size="small" label="重新读取" @click="refresh" /></p>
+      <p v-else-if="state.job?.status === 'failed'" class="field-error" role="alert">{{ state.job.error }}</p>
+    </template>
+    <Dialog v-model:visible="promptOpen" modal :draggable="false" header="生成 PDF 目录" class="study-dialog" :style="{ width: 'min(480px, calc(100vw - 32px))' }">
+      <p>将提取 PDF 每页的部分文字，发送给“{{ availability.name }} / {{ availability.model }}”生成目录，可能产生模型调用费用。扫描件请先进行 OCR，或手动编辑目录。</p>
+      <p v-if="state.entries.length">生成成功后替换现有目录；生成失败将保留现有目录。</p>
+      <template #footer><Button label="取消" severity="secondary" outlined @click="promptOpen = false" /><Button label="开始生成" @click="generate" /></template>
+    </Dialog>
+    <Dialog v-model:visible="editorOpen" modal :draggable="false" :closable="!saving" :close-on-escape="!saving" header="编辑 PDF 目录" class="study-dialog" :style="{ width: 'min(760px, calc(100vw - 24px))' }">
+      <div class="pdf-outline-editor">
+        <p>按阅读顺序填写标题。页码使用 PDF 实际页序，从 1 开始；层级支持 1～6 级。</p>
+        <Message v-if="editorError" severity="error">{{ editorError }}</Message>
+        <div class="pdf-outline-editor-row pdf-outline-editor-labels"><span>标题</span><span>层级</span><span>页码</span><span></span></div>
+        <div v-for="(entry, index) in draft" :key="index" class="pdf-outline-editor-row">
+          <InputText v-model="entry.title" :aria-label="`第 ${index + 1} 项标题`" maxlength="200" />
+          <InputNumber v-model="entry.level" :aria-label="`第 ${index + 1} 项层级`" :min="1" :max="6" :use-grouping="false" />
+          <InputNumber v-model="entry.page" :aria-label="`第 ${index + 1} 项页码`" :min="1" :max="pageCount" :use-grouping="false" />
+          <Button text severity="danger" label="删" :aria-label="`删除第 ${index + 1} 项`" @click="draft.splice(index, 1)" />
+        </div>
+        <Button label="添加目录项" outlined :disabled="draft.length >= 3000" @click="draft.push({ title: '', level: 1, page: 1 })" />
+      </div>
+      <template #footer><Button label="取消" severity="secondary" outlined :disabled="saving" @click="editorOpen = false" /><Button label="保存目录" :loading="saving" :disabled="saving" @click="save" /></template>
+    </Dialog>
+  </div>
+</template>

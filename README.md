@@ -2,6 +2,30 @@
 
 简洁的个人学习文档管理系统：**pnpm Monorepo + Vue 3 + TypeScript + NestJS + SQLite + 可配置 OSS**。界面借鉴语雀的知识库阅读方式，不使用后台管理模板。保留 v0.2.0 的目录树、Markdown、富文本、PDF/DOCX 在线预览与宽屏阅读布局。
 
+## PDF 连续阅读与 AI 目录（实验分支）
+
+- PDF 加载准备及阅读器初始化提示占满阅读区域并居中；正文支持连续滚动，只渲染可见页及相邻页，缩略图、页码输入及翻页按钮同步定位。
+- 管理员进入 **系统设置 → AI 配置**，添加 DeepSeek、OpenAI、豆包/火山方舟、Qwen/百炼或 OpenAI 兼容服务。填写实际 Base URL、可用模型 ID、API Key，保存、测试连接后设为默认。可保存多个配置。AI 参数全部通过页面管理，无须添加模型配置文件。
+- 打开 PDF，右侧采用与 Markdown 一致的层级目录。点击 **手动生成目录**，确认后提取每页部分文字并发送至默认 AI；按 20 页分批处理并显示进度。目录中的页码使用从 1 开始的 PDF 物理页序，不使用印刷页码。
+- 目录保存于 SQLite，刷新、换设备或重新打开均可读取，点击目录项跳至对应页。**编辑目录**可新增、删除、修正标题、层级和页码，也支持完全手工编写。重新生成成功才替换旧目录，失败不覆盖旧目录；编辑时检查跨窗口更新冲突。
+- AI Key 使用 AES-256-GCM 加密，不通过接口回显。首次保存时自动在数据目录生成 `ai-secret.key`；备份时须连同整个数据目录保存，丢失该文件将无法解密现有 AI Key。
+- 当前针对文字型 PDF，每页取部分文字，无法保证识别所有标题；扫描件需先 OCR 或手工编写目录。单次支持最多 2000 页、90 万提取字符，较大文件需拆分。模型需支持 Chat Completions 文本输出。
+- 生成任务在后端执行；任务提交成功后离开页面不会中断，重新打开会继续查询进度。尚在浏览器提取文字时离开文档会停止提取。服务重启后未完成任务标记失败，可重新生成；已保存目录不受影响。支持单用户一个、全站两个并行任务。
+- 无需新增运行依赖，启动后自动创建 AI 配置、PDF 目录与任务数据表。第三方实际调用需自行填写可用密钥后测试。
+
+验证命令：
+
+```bash
+pnpm typecheck
+pnpm build
+pnpm --filter @studydocs/api test:pdf-outline
+pnpm --filter @studydocs/web test:pdf-layout
+pnpm --filter @studydocs/web test:outline
+pnpm smoke
+```
+
+服务商协议参考：[DeepSeek](https://api-docs.deepseek.com/)、[OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[火山方舟 OpenAI 兼容接口](https://www.volcengine.com/docs/82379/1330626)、[Qwen OpenAI 兼容接口](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)。模型及地域域名以对应控制台为准。
+
 ## v0.3.3 前台 UI 组件统一与主题
 
 - **PrimeVue 4 + Aura** 已扩展到登录（输入框、密码框、提示）、系统设置（输入框、数字输入、开关、选项组、按钮、Logo 上传）、文档文件上传、目录右键菜单、顶部操作菜单、删除确认框、全局消息通知、文档操作按钮、回收站和富文本工具栏等位置。

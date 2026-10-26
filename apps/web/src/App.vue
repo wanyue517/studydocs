@@ -54,7 +54,7 @@ const creating = ref(false);
 const sidebarVisible = ref(true);
 const shellRef = ref<HTMLElement | null>(null);
 const markdownEditing = ref(false);
-const hasOutline = computed(() => store.panel === 'document' && (store.active?.kind === 'markdown' || store.active?.kind === 'richtext'));
+const hasOutline = computed(() => store.panel === 'document' && (store.active?.kind === 'markdown' || store.active?.kind === 'richtext' || store.active?.kind === 'pdf'));
 const panels = useSidebarWidths(shellRef, sidebarVisible, hasOutline);
 const mobileSidebar = ref(false);
 const menu = ref<{ item: KnowledgeItem | null } | null>(null);
@@ -300,9 +300,10 @@ watch(() => account.user?.id, (id, oldId) => {
       </div>
     </main>
 
-    <aside v-if="panels.outlineVisible.value" id="outline-panel" class="outline-sidebar">
+    <aside v-show="panels.outlineVisible.value" id="outline-panel" class="outline-sidebar">
       <PanelResizeHandle side="right" :width="panels.widths.value.right" :min="200" :max="panels.rightMax.value" :default-width="250" controls="outline-panel" label="调整右侧目录栏宽度" @resize="panels.resize('right', $event)" @finish="panels.persist" />
-      <div class="outline-header"><AlignLeft :size="17" /><span>文章目录</span></div>
+      <div class="outline-header"><AlignLeft :size="17" /><span>{{ active?.kind === 'pdf' ? 'PDF 目录' : '文章目录' }}</span></div>
+      <div id="pdf-outline-actions"></div>
       <nav class="outline-list custom-scroll" aria-label="文章目录"><ul class="outline-tree"><OutlineNode v-for="entry in outlineTree" :key="entry.index" :entry="entry" @navigate="documentRef?.scrollToHeading($event)" /></ul></nav>
     </aside>
 
