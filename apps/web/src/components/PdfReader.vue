@@ -189,7 +189,20 @@ async function bookmarks(): Promise<import('@studydocs/shared').PdfOutlineEntry[
   await walk(await doc.getOutline() ?? [], 1);
   return result;
 }
-defineExpose({ selectPage, extractText, pageImage, bookmarks });
+async function pageText(number: number) {
+  const pdfPage = await document.value?.getPage(number);
+  if (!pdfPage) throw new Error('PDF 尚未加载');
+  const content = await pdfPage.getTextContent();
+  let text = '', previousY: number | undefined;
+  for (const item of content.items) {
+    if (!('str' in item)) continue;
+    const y = item.transform[5];
+    if (previousY !== undefined && Math.abs(y - previousY) > 3) text += '\n';
+    text += item.str + (item.hasEOL ? '\n' : ' '); previousY = y;
+  }
+  return text;
+}
+defineExpose({ selectPage, extractText, pageImage, bookmarks, pageText });
 onDeactivated(savePosition);
 onBeforeUnmount(() => { stopped = true; savePosition(); observer?.disconnect(); });
 </script>

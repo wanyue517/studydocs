@@ -213,6 +213,6 @@ body.resizing-panels iframe { pointer-events: none; }
 .pdf-outline-actions .field-error { color: #b42318; overflow-wrap: anywhere; }
 .pdf-outline-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
 .pdf-outline-editor { display: flex; flex-direction: column; gap: 12px; }
-.pdf-outline-editor-row { display: grid; grid-template-columns: minmax(120px,1fr) 80px 80px 40px; gap: 8px; align-items: center; }
+.pdf-outline-editor-row { display: grid; grid-template-columns: minmax(120px,1fr) 80px 80px 110px; gap: 8px; align-items: center; }
 .pdf-outline-editor-row .p-inputnumber-input { width: 100%; }
 .pdf-outline-editor-labels { font-size: 13px; color: var(--ink-soft); }

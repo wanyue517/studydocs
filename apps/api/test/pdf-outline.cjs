@@ -11,7 +11,7 @@ const { StorageService } = require('../dist/storage.service');
 const { AuthService } = require('../dist/auth');
 const { DocumentsService } = require('../dist/documents.service');
 const { AiService } = require('../dist/ai.service');
-const { PdfOutlineService, parseTocText } = require('../dist/pdf-outline.service');
+const { PdfOutlineService, parseTocText, parseBodyHeadings } = require('../dist/pdf-outline.service');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 (async () => {
   const database = new DatabaseService(); const originalFetch = global.fetch;
@@ -121,6 +121,30 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     if (process.env.OCR_TEST_IMAGE) {
       const result = await outlines.recognize(owner, pdf.id, { image: 'data:image/jpeg;base64,' + readFileSync(process.env.OCR_TEST_IMAGE).toString('base64'), engine: 'local', language: 'eng' });
       assert.ok(result.entries.some(e => e.page === 12 && e.title.includes('Chapter')));
+    }
+    assert.deepEqual(parseBodyHeadings('1.1网络模型\n1.1.1 OSI模型\n1.2 TCP/IP\n192.168.1.1\n1.2.3\n正文句子。\n第一章 网络基础', 4), [
+      {title:'1.1网络模型',level:2,page:4}, {title:'1.1.1 OSI模型',level:3,page:4},
+      {title:'1.2 TCP/IP',level:2,page:4}, {title:'第一章 网络基础',level:1,page:4}
+    ]);
+    const body = await outlines.bodyPage(owner, pdf.id, {page: 4, text:'1.1 Test heading\n1.1.1 Nested heading', language:'eng'});
+    assert.equal(body.entries.length, 2);
+    assert.deepEqual(await outlines.bodyPage(owner, pdf.id, {page:5,text:'ordinary paragraph',language:'eng'}), {entries:[]});
+    await assert.rejects(() => outlines.bodyPage(member.id, pdf.id, {page:4,text:'1.1 test',language:'eng'}), /不存在/);
+    const beforeDraft = outlines.get(owner, pdf.id);
+    const draft = outlines.saveDraft(owner, pdf.id, {entries:body.entries,baseUpdatedAt:beforeDraft.updatedAt,updatedAt:null});
+    assert.deepEqual(outlines.get(owner, pdf.id).entries,beforeDraft.entries,'草稿不修改正式目录');
+    const reopened = new PdfOutlineService(database, docs, ai);
+    assert.deepEqual(reopened.get(owner,pdf.id).draft.entries,body.entries,'草稿跨服务实例保留');
+    assert.throws(() => reopened.saveDraft(owner,pdf.id,{entries:[],baseUpdatedAt:beforeDraft.updatedAt,updatedAt:null}), /其他窗口/);
+    assert.throws(() => reopened.save(owner,pdf.id,{entries:body.entries,pageCount:25,updatedAt:beforeDraft.updatedAt,draftUpdatedAt:'stale'}), /其他窗口/);
+    const published = reopened.save(owner,pdf.id,{entries:body.entries,pageCount:25,updatedAt:beforeDraft.updatedAt,draftUpdatedAt:draft.updatedAt});
+    assert.equal(published.draft,null); assert.deepEqual(published.entries,body.entries);
+    if (process.env.OCR_TEST_IMAGE) {
+      const image = 'data:image/jpeg;base64,' + readFileSync(process.env.OCR_TEST_IMAGE).toString('base64');
+      const first = await reopened.bodyPage(owner,pdf.id,{page:4,image,language:'eng'});
+      const next = await reopened.bodyPage(owner,pdf.id,{page:5,image,language:'eng'});
+      assert.ok(first.entries.some(e => e.title.startsWith('1.2')));
+      assert.ok(next.entries.every(e => e.page === 5),'缓存 OCR 换页后使用新的物理页码');
     }
     docs.trash(owner, pdf.id); await docs.removeForever(owner, pdf.id);
     assert.equal(database.db.prepare('SELECT COUNT(*) n FROM pdf_outlines').get().n, 0);

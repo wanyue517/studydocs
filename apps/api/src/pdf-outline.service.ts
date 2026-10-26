@@ -33,6 +33,14 @@ export class PdfOutlineService {
       id TEXT PRIMARY KEY, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
       owner_id TEXT NOT NULL, status TEXT NOT NULL, progress INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '', model TEXT NOT NULL, created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS pdf_outline_drafts (
+      item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+      entries TEXT NOT NULL, base_updated_at TEXT, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS pdf_page_ocr (
+      item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      cache_key TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY(item_id,cache_key)
+    );
     CREATE TABLE IF NOT EXISTS pdf_toc_recognition (
       item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
       cache_key TEXT NOT NULL, entries TEXT NOT NULL, PRIMARY KEY(item_id, cache_key)
@@ -61,7 +69,8 @@ export class PdfOutlineService {
     const saved = this.database.db.prepare('SELECT * FROM pdf_outlines WHERE item_id=?').get(id) as Saved | undefined;
     const job = this.database.db.prepare('SELECT id,status,progress,error,model FROM pdf_outline_jobs WHERE item_id=? AND owner_id=? ORDER BY rowid DESC LIMIT 1').get(id, owner) as JobRow | undefined;
     const partial = job ? this.database.db.prepare('SELECT entries FROM pdf_outline_partial WHERE job_id=?').get(job.id) as { entries: string } | undefined : undefined;
-    return { partialEntries: partial ? JSON.parse(partial.entries) : [], entries: saved ? JSON.parse(saved.entries) : [], pageCount: saved?.page_count ?? 0, updatedAt: saved?.updated_at ?? null, job: job ?? null };
+    const draft = this.database.db.prepare('SELECT entries,base_updated_at,updated_at FROM pdf_outline_drafts WHERE item_id=?').get(id) as { entries: string; base_updated_at: string | null; updated_at: string } | undefined;
+    return { draft: draft ? { entries: JSON.parse(draft.entries), baseUpdatedAt: draft.base_updated_at, updatedAt: draft.updated_at } : null, partialEntries: partial ? JSON.parse(partial.entries) : [], entries: saved ? JSON.parse(saved.entries) : [], pageCount: saved?.page_count ?? 0, updatedAt: saved?.updated_at ?? null, job: job ?? null };
   }
   private write(owner: string, id: string, entries: PdfOutlineEntry[], pageCount: number) {
     this.assertPdf(owner, id);
@@ -69,15 +78,53 @@ export class PdfOutlineService {
       ON CONFLICT(item_id) DO UPDATE SET entries=excluded.entries,page_count=excluded.page_count,updated_at=excluded.updated_at`)
       .run(id, JSON.stringify(entries), pageCount, new Date().toISOString());
   }
-  save(owner: string, id: string, input: { entries: unknown; pageCount: number; updatedAt: string | null }) {
+  save(owner: string, id: string, input: { entries: unknown; pageCount: number; updatedAt: string | null; draftUpdatedAt?: string | null }) {
     const current = this.get(owner, id);
     if (!input || !Number.isInteger(input.pageCount) || input.pageCount < 1 || input.pageCount > 2000) throw new BadRequestException('PDF 总页数无效');
     if (current.job?.status === 'running') throw new ConflictException('目录正在生成，请稍后编辑');
     if (input.updatedAt !== current.updatedAt) throw new ConflictException('目录已在其他窗口更新，请刷新后编辑');
+    if (input.draftUpdatedAt !== undefined && (current.draft?.updatedAt ?? null) !== input.draftUpdatedAt) throw new ConflictException('草稿已在其他窗口修改，请重新打开文档');
     const entries = validateEntries(input.entries, input.pageCount);
     this.write(owner, id, entries, input.pageCount);
+    if (input.draftUpdatedAt) this.database.db.prepare('DELETE FROM pdf_outline_drafts WHERE item_id=? AND updated_at=?').run(id, input.draftUpdatedAt);
     this.database.db.prepare("DELETE FROM pdf_outline_jobs WHERE item_id=? AND status!='running'").run(id);
     return this.get(owner, id);
+  }
+  saveDraft(owner: string, id: string, input: { entries: PdfOutlineEntry[]; baseUpdatedAt: string | null; updatedAt: string | null }) {
+    const current = this.get(owner, id);
+    if (!input || (input.baseUpdatedAt !== null && typeof input.baseUpdatedAt !== 'string') || !Array.isArray(input.entries) || input.entries.length > 3000 || input.entries.some(e => !e || typeof e.title !== 'string' || e.title.length > 200 || (e.level !== null && (!Number.isInteger(e.level) || e.level < 1 || e.level > 6)) || (e.page !== null && (!Number.isInteger(e.page) || e.page < 1 || e.page > 2000)))) throw new BadRequestException('草稿格式无效');
+    if ((current.draft?.updatedAt ?? null) !== input.updatedAt) throw new ConflictException('草稿已在其他窗口修改，请重新打开文档');
+    const updatedAt = randomUUID();
+    this.database.db.prepare('INSERT OR REPLACE INTO pdf_outline_drafts(item_id,entries,base_updated_at,updated_at) VALUES(?,?,?,?)')
+      .run(id, JSON.stringify(input.entries), input.baseUpdatedAt, updatedAt);
+    return { entries: input.entries, baseUpdatedAt: input.baseUpdatedAt, updatedAt };
+  }
+  async bodyPage(owner: string, id: string, input: { page: number; text?: string; image?: string; language: string }) {
+    this.assertPdf(owner, id);
+    if (!input || !Number.isInteger(input.page) || input.page < 1 || input.page > 2000 || (input.text !== undefined && (typeof input.text !== 'string' || input.text.length > 200000))) throw new BadRequestException('正文页参数无效');
+    let text = input.text ?? '';
+    if (input.image) {
+      if (typeof input.image !== 'string' || input.image.length > 3500000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(input.image) || !['eng','chi_sim+eng'].includes(input.language)) throw new BadRequestException('图片或 OCR 语言无效');
+      if (this.recognizing.has(owner) || this.recognizing.size >= 2) throw new ConflictException('正在识别，请稍后重试');
+      this.recognizing.add(owner);
+      try { text = await this.localOcr(id, input.image, input.language); }
+      finally { this.recognizing.delete(owner); }
+    }
+    return { entries: parseBodyHeadings(text, input.page) };
+  }
+  private async localOcr(id: string, image: string, language: string) {
+    const key = createHash('sha256').update('ocr-v1:' + language + ':' + image).digest('hex');
+    const cached = this.database.db.prepare('SELECT text FROM pdf_page_ocr WHERE item_id=? AND cache_key=?').get(id, key) as { text: string } | undefined;
+    if (cached) return cached.text;
+    const folder = await mkdtemp(join(tmpdir(), 'studydocs-ocr-'));
+    try {
+      const path = join(folder, 'page.jpg');
+      await writeFile(path, Buffer.from(image.split(',')[1], 'base64'));
+      const { stdout } = await promisify(execFile)('tesseract', [path, 'stdout', '-l', language, '--psm', '6'], { timeout: 60000, maxBuffer: 2000000 });
+      this.database.db.prepare('INSERT OR REPLACE INTO pdf_page_ocr(item_id,cache_key,text) VALUES(?,?,?)').run(id, key, stdout);
+      return stdout;
+    } catch { throw new BadRequestException('本地 OCR 不可用或超时，请安装 Tesseract 及所选语言包后继续'); }
+    finally { await rm(folder, { recursive: true, force: true }); }
   }
   private readonly recognizing = new Set<string>();
   async recognize(owner: string, id: string, input: { image: string; engine: 'local' | 'vision'; language: string }) {
@@ -102,19 +149,11 @@ export class PdfOutlineService {
         try { entries = validateEntries(JSON.parse(result.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')).entries, 100000); }
         catch { throw new BadRequestException('模型未返回有效目录，请确认使用支持图片输入的模型'); }
       } else {
-        const folder = await mkdtemp(join(tmpdir(), 'studydocs-ocr-'));
-        let text: string;
-        try {
-          const path = join(folder, 'page.jpg');
-          await writeFile(path, Buffer.from(input.image.split(',')[1], 'base64'));
-          const result = await promisify(execFile)('tesseract', [path, 'stdout', '-l', input.language, '--psm', '6'], { timeout: 60000, maxBuffer: 2_000_000 });
-          text = result.stdout;
-        } catch { throw new BadRequestException('本地 OCR 不可用或超时，请安装 Tesseract 及所选语言包，或改用视觉模型'); }
-        finally { await rm(folder, { recursive: true, force: true }); }
+        const text = await this.localOcr(id, input.image, input.language);
         entries = parseTocText(text);
       }
       // Cache only validated successful pages. Empty recognition can be retried.
-      if (!entries.length) throw new BadRequestException('未识别到带数字页码的目录项，请调整图片清晰度、改用视觉模型或手工编辑');
+      // Empty pages are valid results and must not abort a multi-page selection.
       this.assertPdf(owner, id);
       this.database.db.prepare('INSERT OR REPLACE INTO pdf_toc_recognition(item_id,cache_key,entries) VALUES(?,?,?)').run(id, cacheKey, JSON.stringify(entries));
       return { entries, cached: false };
@@ -206,5 +245,20 @@ export function parseTocText(text: string): PdfOutlineEntry[] {
     const numbering = title.match(/^(\d+(?:\.\d+)*)(?:[.、\s]|$)/);
     const level = numbering ? Math.min(6, numbering[1].split('.').length) : 1;
     return [{ title, level, page: Number(match[2]) }];
+  }).slice(0, 3000);
+}
+
+export function parseBodyHeadings(text: string, page: number): PdfOutlineEntry[] {
+  const seen = new Set<string>();
+  return text.split(/\r?\n/).flatMap(raw => {
+    const title = raw.normalize('NFKC').replace(/[\t ]+/g, ' ').replace(/(\d)\s*\.\s*(?=\d)/g, '$1.').trim();
+    if (title.length < 3 || title.length > 100 || /[。；;]$/.test(title) || /[.·…]{3,}\s*\d+$/.test(title)) return [];
+    const numbered = title.match(/^(\d{1,3}(?:\.\d{1,3}){1,5})[.、．]?\s*([^\d.\s].*)$/);
+    const top = title.match(/^(?:第[一二三四五六七八九十百零〇\d]+[章节篇部]\s*\S+|\d{1,3}[.、．\s]\s*[^\d.\s].*)$/);
+    if (!numbered && !top) return [];
+    if (/^\d+(?:\.\d+)+\s*(?:版本|version)\b/i.test(title)) return [];
+    if (seen.has(title)) return [];
+    seen.add(title);
+    return [{ title, level: numbered ? numbered[1].split('.').length : 1, page }];
   }).slice(0, 3000);
 }

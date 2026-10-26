@@ -1,4 +1,4 @@
-import type { KnowledgeItem, CreateItemInput, PatchItemInput, AiProfile, AiProfileInput, PdfOutlineState, PdfOutlineEntry, PdfTextPage } from '@studydocs/shared';
+import type { KnowledgeItem, CreateItemInput, PatchItemInput, AiProfile, AiProfileInput, PdfOutlineState, PdfOutlineEntry, PdfTextPage, PdfOutlineDraft } from '@studydocs/shared';
 import { hashChunk, yieldToBrowser } from './transfer-work';
 
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
@@ -32,9 +32,11 @@ export const api = {
   aiAvailability: () => request<{ configured: boolean; name: string; model: string }>('/ai/availability'),
   pdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline`),
   recognizeTocPage: (id: string, image: string, engine: 'local' | 'vision', language: string) => request<{ entries: PdfOutlineEntry[]; cached: boolean }>(`/items/${id}/pdf-outline/recognize-page`, { method: 'POST', body: JSON.stringify({ image, engine, language }) }),
+  bodyHeadings: (id: string, page: number, text: string, image: string | undefined, language: string) => request<{ entries: PdfOutlineEntry[] }>(`/items/${id}/pdf-outline/body-page`, { method: 'POST', body: JSON.stringify({ page, text, image, language }) }),
+  saveOutlineDraft: (id: string, entries: PdfOutlineEntry[], baseUpdatedAt: string | null, updatedAt: string | null) => request<PdfOutlineDraft>(`/items/${id}/pdf-outline/draft`, { method: 'PATCH', body: JSON.stringify({ entries, baseUpdatedAt, updatedAt }) }),
   resumePdfOutline: (id: string) => request<PdfOutlineState>(`/items/${id}/pdf-outline/resume`, { method: 'POST' }),
   generatePdfOutline: (id: string, pages: PdfTextPage[], pageCount: number) => request<PdfOutlineState>(`/items/${id}/pdf-outline/generate`, { method: 'POST', body: JSON.stringify({ pages, pageCount }) }),
-  savePdfOutline: (id: string, entries: PdfOutlineEntry[], pageCount: number, updatedAt: string | null) => request<PdfOutlineState>(`/items/${id}/pdf-outline`, { method: 'PATCH', body: JSON.stringify({ entries, pageCount, updatedAt }) }),
+  savePdfOutline: (id: string, entries: PdfOutlineEntry[], pageCount: number, updatedAt: string | null, draftUpdatedAt?: string | null) => request<PdfOutlineState>(`/items/${id}/pdf-outline`, { method: 'PATCH', body: JSON.stringify({ entries, pageCount, updatedAt, draftUpdatedAt }) }),
   sitePublic: () => request<PublicSite>('/site/public'),
   me: () => request<Account>('/auth/me'),
   login: (username:string,password:string) => request<Account>('/auth/login',{method:'POST',body:JSON.stringify({username,password})}),
